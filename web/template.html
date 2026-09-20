@@ -330,6 +330,7 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div><b>毛收益率</b> 为同一口径相除的估算：公寓月租&times;12 &divide; 公寓均价。未扣 service charge、ground rent、管理费、空置与税，实际净收益通常低 1.5&ndash;2.5 个百分点。</div>
     <div><b>公寓 · 逐笔成交</b> Land Registry Price Paid Data，1995 起每一笔成交，是唯一同时带房型、新房标志与完整 postcode 的源——HPI 分别发布公寓序列和新房序列，但从不交叉。这里是<b>中位成交价</b>，非 HPI 的混合调整口径：某季度一栋 studio 楼盘集中交付就会把新房中位价拉低，读数时请一并看成交量。已剔除 Category B（法拍、批量过户、right-to-buy）；单季新房或二手样本少于 10 笔的中位数按无数据处理；新房登记有滞后，最近两个季度通常不完整。PPD 无面积字段，所以<b>溢价不是每平尺的同口径比较</b>。</div>
     <div><b>开发区对比</b> 按 postcode sector 聚合，sector 成交量比 borough 小一个数量级，新房登记滞后影响更重（SE10 0 在 2024 年有 133 笔新建，2025 年只剩 8 笔），所以参考月上限设在新房序列截断点。sector 没有公开边界数据，因此这一层只做表格和曲线，不做地图。Category B（批量转让、机构整栋收购做 build-to-rent）已排除，这会系统性低估 BTR 集中片区的新建成交量。</div>
+    <div><b>两套片区口径并存</b> 页面里有两个片区区块，方法不同，互为校验：「开发区对比」用<b>滚动12个月中位数</b>（样本&lt;20 不出数，sector 由成交数据反推，见 <code>scripts/build_ppd_agg.py</code> 与 <code>build_sector_agg.py</code>）；「十个新开发区」用<b>年度中位数</b>（样本&lt;10 不出数，sector 人工指定后用街道名反查验证，见 <code>scripts/build_ppd_aggregates.py</code>）。滚动窗口更平滑、出数更早；年度窗口样本更厚、更抗交付批次扰动。两者对不上的地方，通常就是样本太薄。</div>
     <div><b>City of London</b> 租赁样本过小，ONS 不发布其租金，地图上按无数据处理。</div>
     <div>重跑数据：<code>python3 scripts/build_dataset.py</code> &rarr; <code>python3 scripts/build_site.py</code>。每月 ONS 发布后换掉 <code>data/raw/</code> 里的两个文件即可。</div>
   </footer>
