@@ -1,0 +1,723 @@
+<!-- Artifact version 1789899503-4104, published 2026-09-20T10:18:23Z by a
+     concurrent session working in this same directory. Inline JSON payloads
+     stripped. Preserved so that line of work stays recoverable; it is not
+     part of the current build. -->
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta charset="utf-8">
+<title>伦敦房价租金地图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f5f7f9; --surface:#ffffff; --surface-2:#eceff4; --surface-3:#e3e8ee;
+  --line:#dbe1e9; --line-strong:#c3ccd7;
+  --ink:#0d1419; --ink-2:#4b5762; --ink-3:#78838f;
+  --accent:#2a78d6; --accent-soft:#e8f0fc;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --pos:#0ca30c; --neg:#d03b3b;
+  --nodata:#e6e9ee; --nodata-ink:#8d97a2;
+  --seq-1:#e3edfb; --seq-2:#c2d9f6; --seq-3:#9ec5f4; --seq-4:#6da7ec;
+  --seq-5:#3987e5; --seq-6:#256abf; --seq-7:#104281;
+  --div-n3:#9c2c21; --div-n2:#dd5648; --div-n1:#f4b1a9; --div-0:#eceae6;
+  --div-p1:#9ec5f4; --div-p2:#3987e5; --div-p3:#184f95;
+  --shadow:0 1px 2px rgba(13,20,25,.06), 0 4px 16px rgba(13,20,25,.05);
+  --map-stroke:#ffffff; --map-plate:#f4f6f9; --map-ink:#3a4652; --map-sel:#0d1419;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#0f1318; --surface:#161c24; --surface-2:#1d242e; --surface-3:#252e39;
+    --line:#2a333f; --line-strong:#3a4652;
+    --ink:#f1f4f8; --ink-2:#b2bdc8; --ink-3:#7d8895;
+    --accent:#3987e5; --accent-soft:#1a2b42;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --pos:#0ca30c; --neg:#e06a6a;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35);
+    --map-plate:#e7ebf1;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#0f1318; --surface:#161c24; --surface-2:#1d242e; --surface-3:#252e39;
+  --line:#2a333f; --line-strong:#3a4652;
+  --ink:#f1f4f8; --ink-2:#b2bdc8; --ink-3:#7d8895;
+  --accent:#3987e5; --accent-soft:#1a2b42;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --pos:#0ca30c; --neg:#e06a6a;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35);
+  --map-plate:#e7ebf1;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.num{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.kicker{font-family:"Newsreader",Georgia,serif;font-style:italic;color:var(--ink-3);font-size:14px}
+.wrap{max-width:1360px;margin:0 auto;padding-inline:16px;padding-block:0 32px}
+
+/* ---------- header ---------- */
+header{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:30;
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+}
+.hd{max-width:1360px;margin:0 auto;padding-inline:16px;padding-block:12px;
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.01em}
+.vintage{font-size:12px;color:var(--ink-3);margin-left:auto;display:flex;gap:10px;align-items:center}
+.tbtn{background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2);
+      border-radius:7px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}
+.tbtn:hover{border-color:var(--line-strong);color:var(--ink)}
+.tbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- london summary strip ---------- */
+.strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);
+       border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:18px}
+.stat{background:var(--surface);padding:13px 15px;min-width:0}
+.stat .lab{font-size:11px;letter-spacing:.055em;text-transform:uppercase;color:var(--ink-3);
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .val{font-size:22px;font-weight:500;margin-top:3px;letter-spacing:-.02em}
+.stat .sub{font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.up{color:var(--pos)} .dn{color:var(--neg)}
+
+/* ---------- controls ---------- */
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:20px}
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;
+            padding:6px 11px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:500;box-shadow:var(--shadow)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+select{font:inherit;font-size:13px;background:var(--surface);color:var(--ink);
+       border:1px solid var(--line);border-radius:9px;padding:7px 10px;max-width:100%}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+label.fld{display:flex;flex-direction:column;gap:4px}
+label.fld > span{font-size:11px;letter-spacing:.055em;text-transform:uppercase;color:var(--ink-3)}
+
+/* ---------- main grid ---------- */
+.grid{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.card > .chead{display:flex;align-items:center;gap:10px;padding:13px 16px 0;flex-wrap:wrap}
+.chead h2{font-size:14px;font-weight:600;margin:0}
+.chead .note{font-size:11.5px;color:var(--ink-3);margin-left:auto}
+
+/* ---------- map ---------- */
+.mapbox{padding:8px 10px 14px;position:relative}
+#map{width:100%;height:auto;display:block;touch-action:manipulation;
+     background:var(--map-plate);border-radius:10px}
+#map path.b{stroke:var(--map-stroke);stroke-width:.9;cursor:pointer;transition:opacity .12s}
+#map path.b:hover{opacity:.82}
+#map path.b.sel{stroke:var(--map-sel);stroke-width:2.1;paint-order:stroke}
+#map text.lbl{font-family:"IBM Plex Mono",monospace;font-size:8.2px;fill:var(--map-ink);
+              pointer-events:none;text-anchor:middle;font-weight:500}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line-strong);
+     border-radius:9px;padding:8px 11px;box-shadow:var(--shadow);font-size:12.5px;z-index:12;
+     min-width:130px;transition:opacity .08s}
+.tip .tn{font-weight:600;margin-bottom:3px}
+.tip .tv{font-size:16px;font-weight:500}
+.tip .tx{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+
+/* ---------- legend ---------- */
+.legend{display:flex;align-items:center;gap:0;margin:2px 16px 0;flex-wrap:wrap}
+.lg-swatches{display:flex;gap:2px;flex:1;min-width:190px}
+.lg-item{flex:1;min-width:0}
+.lg-item i{display:block;height:9px;border-radius:2px}
+.lg-item b{display:block;font:500 10px/1.5 "IBM Plex Mono",monospace;color:var(--ink-3);
+           margin-top:3px;text-align:right;white-space:nowrap}
+.lg-nd{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-3);margin-left:12px}
+.lg-ends{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-3);
+         width:100%;margin-top:1px;letter-spacing:.02em}
+.lg-nd i{width:14px;height:9px;border-radius:2px;display:block;background:
+  repeating-linear-gradient(45deg,var(--nodata) 0 3px,var(--nodata-ink) 3px 4px)}
+
+/* ---------- timeline ---------- */
+.timeline{display:flex;align-items:center;gap:12px;padding:12px 16px 14px;border-top:1px solid var(--line);margin-top:10px}
+.play{width:34px;height:34px;flex:none;border-radius:50%;border:1px solid var(--line);
+      background:var(--surface-2);color:var(--ink);cursor:pointer;display:grid;place-items:center;font-size:12px}
+.play:hover{border-color:var(--accent);color:var(--accent)}
+.play:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+.mono-date{font:500 14px/1 "IBM Plex Mono",monospace;min-width:74px;text-align:right}
+
+/* ---------- ranking ---------- */
+.rank{padding:10px 8px 12px 16px}
+.rank-scroll{max-height:430px;overflow-y:auto;padding-right:8px}
+.row{display:grid;grid-template-columns:118px minmax(0,1fr) 74px;gap:9px;align-items:center;
+     padding:2.5px 4px;border-radius:6px;cursor:pointer}
+.row:hover{background:var(--surface-2)}
+.row.sel{background:var(--accent-soft)}
+.row .nm{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.sel .nm{color:var(--ink);font-weight:500}
+.row .bar{height:13px;background:var(--surface-3);border-radius:3px;overflow:hidden;position:relative}
+.row .bar i{position:absolute;top:0;bottom:0;border-radius:3px}
+.row .vl{font:500 12px/1 "IBM Plex Mono",monospace;text-align:right;color:var(--ink)}
+
+/* ---------- detail ---------- */
+.detail{margin-top:16px}
+.dhead{padding:14px 16px 0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dhead h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.dhead .code{font:400 11px/1 "IBM Plex Mono",monospace;color:var(--ink-3)}
+.dhead .clear{margin-left:auto}
+.dstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;
+        background:var(--line);border-block:1px solid var(--line);margin-top:13px}
+.dstats .stat{padding:11px 14px}
+.dstats .stat .val{font-size:18px}
+.charts{padding:6px 16px 16px;display:grid;gap:4px}
+.chart-t{font-size:12.5px;font-weight:500;color:var(--ink-2);margin-top:12px;display:flex;
+         align-items:center;gap:12px;flex-wrap:wrap}
+.lgd{display:flex;gap:11px;font-size:11px;color:var(--ink-3);margin-left:auto}
+.lgd span{display:flex;align-items:center;gap:4px}
+.lgd i{width:11px;height:2.5px;border-radius:2px;display:block}
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .zl{stroke:var(--line-strong);stroke-width:1;stroke-dasharray:3 3}
+.chart text{font-family:"IBM Plex Mono",monospace;font-size:9px;fill:var(--ink-3)}
+.chart .cross{stroke:var(--line-strong);stroke-width:1}
+.chart .hov{visibility:hidden}
+.chart .hov.on{visibility:visible}
+.chartwrap{position:relative}
+
+.submul{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:10px;padding:6px 16px 4px}
+.smp{border:1px solid var(--line);border-radius:10px;padding:8px 9px 5px;background:var(--surface-2)}
+.smp h3{margin:0 0 1px;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.smp .meta{font:400 10.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3);margin-bottom:5px}
+.smp svg{width:100%;height:auto;display:block;overflow:visible}
+.smp .idx{font:500 9px/1 "IBM Plex Mono",monospace}
+.subnote{font-size:12px;color:var(--ink-2);padding:10px 16px 0;max-width:72ch;line-height:1.55}
+.tablewrap{overflow-x:auto;padding:8px 16px 18px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:820px}
+th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--surface-2)}
+footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);
+        font-size:12px;color:var(--ink-3);display:grid;gap:7px}
+footer b{color:var(--ink-2);font-weight:500}
+footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:var(--surface-2);
+            padding:1px 5px;border-radius:4px}
+@media (max-width:920px){
+  .grid{grid-template-columns:1fr}
+  .strip{grid-template-columns:repeat(2,1fr)}
+  .rank-scroll{max-height:320px}
+}
+@media (max-width:480px){
+  .strip{grid-template-columns:1fr}
+  .row{grid-template-columns:96px minmax(0,1fr) 66px}
+  h1{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header>
+  <div class="hd">
+    <h1>伦敦房价与租金地图</h1>
+    <span class="kicker">32 boroughs + City of London · 1995&ndash;2026</span>
+    <div class="vintage">
+      <span id="vintage"></span>
+      <button class="tbtn" id="theme" type="button">切换主题</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="strip" id="strip"></div>
+
+  <div class="controls">
+    <label class="fld"><span>指标</span>
+      <select id="metric"></select>
+    </label>
+    <label class="fld"><span>色阶</span>
+      <div class="seg" id="scaleSeg">
+        <button type="button" data-v="global" aria-pressed="true">全历史固定</button>
+        <button type="button" data-v="month" aria-pressed="false">当月拉伸</button>
+      </div>
+    </label>
+    <label class="fld"><span>地图标注</span>
+      <div class="seg" id="labSeg">
+        <button type="button" data-v="off" aria-pressed="true">仅悬停</button>
+        <button type="button" data-v="on" aria-pressed="false">显示数值</button>
+      </div>
+    </label>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="chead"><h2 id="mapTitle">&nbsp;</h2><span class="note" id="mapNote"></span></div>
+      <div class="legend" id="legend"></div>
+      <div class="mapbox">
+        <svg id="map" role="img" aria-label="伦敦各区分级统计地图"></svg>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="timeline">
+        <button class="play" id="play" type="button" aria-label="播放时间轴">&#9654;</button>
+        <input type="range" id="slider" min="0" max="0" value="0" aria-label="月份">
+        <span class="mono-date" id="dateLab"></span>
+      </div>
+    </section>
+
+    <section class="card rank">
+      <div class="chead" style="padding:3px 8px 8px 0"><h2>当月排名</h2>
+        <span class="note" id="rankNote">点击选中</span></div>
+      <div class="rank-scroll" id="rank"></div>
+    </section>
+  </div>
+
+  <section class="card detail">
+    <div class="dhead">
+      <h2 id="dName">Greater London</h2><span class="code" id="dCode"></span>
+      <button class="tbtn clear" id="clearSel" type="button" hidden>返回全伦敦</button>
+    </div>
+    <div class="dstats" id="dStats"></div>
+    <div class="charts" id="charts"></div>
+  </section>
+
+  <section class="card detail" id="subSection">
+    <div class="dhead"><h2>十个新开发区 · 公寓逐笔成交</h2>
+      <span class="code">Price Paid Data · 按 postcode sector 聚合</span></div>
+    <p class="subnote" id="subNote"></p>
+    <div class="chart-t" style="padding:2px 16px 0">
+      <span>二手公寓中位价指数（该片区 2015 年 = 100）</span>
+      <span class="lgd"><span><i style="background:var(--s1)"></i>片区</span>
+        <span><i style="background:var(--ink-3)"></i>全伦敦二手公寓</span></span>
+    </div>
+    <div class="submul" id="subGrid"></div>
+    <div class="tablewrap"><table id="subTable"></table></div>
+  </section>
+
+  <footer>
+    <div><b>房价</b> HM Land Registry / ONS UK House Price Index，月度，1995-01 起，成交价回归模型，覆盖全部成交（含现金）。</div>
+    <div><b>租金</b> ONS Price Index of Private Rents (PIPR)，月度，2015-01 起，估算的是<b>全部在租存量</b>的平均租金，不是当月新挂牌租金，因此低于 Rightmove 的 asking rent。</div>
+    <div><b>毛收益率</b> 为同一口径相除的估算：公寓月租&times;12 &divide; 公寓均价。未扣 service charge、ground rent、管理费、空置与税，实际净收益通常低 1.5&ndash;2.5 个百分点。</div>
+    <div><b>公寓 · 逐笔成交</b> Land Registry Price Paid Data，1995 起每一笔成交，是唯一同时带房型、新房标志与完整 postcode 的源——HPI 分别发布公寓序列和新房序列，但从不交叉。这里是<b>中位成交价</b>，非 HPI 的混合调整口径：某季度一栋 studio 楼盘集中交付就会把新房中位价拉低，读数时请一并看成交量。已剔除 Category B（法拍、批量过户、right-to-buy）；单季新房或二手样本少于 10 笔的中位数按无数据处理；新房登记有滞后，最近两个季度通常不完整。PPD 无面积字段，所以<b>溢价不是每平尺的同口径比较</b>。</div>
+    <div><b>City of London</b> 租赁样本过小，ONS 不发布其租金，地图上按无数据处理。</div>
+    <div>重跑数据：<code>python3 scripts/build_dataset.py</code> &rarr; <code>python3 scripts/build_site.py</code>。每月 ONS 发布后换掉 <code>data/raw/</code> 里的两个文件即可。</div>
+  </footer>
+</div>
+
+<script id="mapdata" type="application/json">/* data payload removed -- rebuildable from scripts/ */</script>
+<script id="geodata" type="application/json">/* data payload removed -- rebuildable from scripts/ */</script>
+<script id="ppddata" type="application/json">/* data payload removed -- rebuildable from scripts/ */</script>
+<script>
+(function(){
+"use strict";
+const DATA = JSON.parse(document.getElementById('mapdata').textContent);
+const GEO  = JSON.parse(document.getElementById('geodata').textContent);
+const MONTHS = DATA.months, AREAS = DATA.areas;
+const PPD = JSON.parse(document.getElementById('ppddata').textContent);
+for(const [code, rec] of Object.entries(PPD.areas || {})){
+  if(AREAS[code]) Object.assign(AREAS[code], rec);
+}
+const LDN = 'E12000007';
+
+/* ---------------- metric definitions ---------------- */
+const money = v => '£' + Math.round(v).toLocaleString('en-GB');
+const moneyK = v => v >= 1e6 ? '£' + (v/1e6).toFixed(2) + 'm' : '£' + Math.round(v/1000) + 'k';
+const pct = v => (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+const pct2 = v => v.toFixed(2) + '%';
+const cnt = v => Math.round(v).toLocaleString('en-GB');
+const pctInt = v => v.toFixed(0) + '%';
+
+const METRICS = [
+  {k:'price',      g:'房价', n:'平均房价',            type:'seq', fmt:money,  fmtShort:moneyK, unit:''},
+  {k:'price_yoy',  g:'房价', n:'房价同比',            type:'div', fmt:pct,    fmtShort:pct,    unit:''},
+  {k:'flat_price', g:'房价', n:'公寓均价',            type:'seq', fmt:money,  fmtShort:moneyK, unit:''},
+  {k:'flat_yoy',   g:'房价', n:'公寓同比',            type:'div', fmt:pct,    fmtShort:pct,    unit:''},
+  {k:'sales',      g:'房价', n:'月度成交量',          type:'seq', fmt:cnt,    fmtShort:cnt,    unit:'套'},
+  {k:'new_price',  g:'新房 vs 二手', n:'新房均价 (HPI)',  type:'seq', fmt:money, fmtShort:moneyK, unit:''},
+  {k:'new_yoy',    g:'新房 vs 二手', n:'新房同比',        type:'div', fmt:pct,   fmtShort:pct,    unit:''},
+  {k:'old_price',  g:'新房 vs 二手', n:'二手均价 (HPI)',  type:'seq', fmt:money, fmtShort:moneyK, unit:''},
+  {k:'old_yoy',    g:'新房 vs 二手', n:'二手同比',        type:'div', fmt:pct,   fmtShort:pct,    unit:''},
+  {k:'new_premium',g:'新房 vs 二手', n:'新房溢价 · 全房型', type:'div', fmt:pct,  fmtShort:pct,    unit:'',
+   breaks:[-10,0,10,20,30,45]},
+  {k:'new_share',  g:'新房 vs 二手', n:'新房占成交比',     type:'seq', fmt:pct2,  fmtShort:pctInt, unit:''},
+  {k:'pf_new',     g:'公寓 · 逐笔成交', n:'新建公寓中位价', type:'seq', fmt:money, fmtShort:moneyK, unit:''},
+  {k:'pf_old',     g:'公寓 · 逐笔成交', n:'二手公寓中位价', type:'seq', fmt:money, fmtShort:moneyK, unit:''},
+  {k:'pf_prem',    g:'公寓 · 逐笔成交', n:'新建公寓溢价',   type:'div', fmt:pct,   fmtShort:pct,    unit:'',
+   breaks:[-10,0,10,20,30,45]},
+  {k:'pf_newshare',g:'公寓 · 逐笔成交', n:'新房占公寓成交比', type:'seq', fmt:pct2, fmtShort:pctInt, unit:''},
+  {k:'pf_n',       g:'公寓 · 逐笔成交', n:'公寓季度成交量', type:'seq', fmt:cnt,   fmtShort:cnt,    unit:'套'},
+  {k:'rent',       g:'租金', n:'平均月租',            type:'seq', fmt:money,  fmtShort:money,  unit:'/月'},
+  {k:'rent_yoy',   g:'租金', n:'租金同比',            type:'div', fmt:pct,    fmtShort:pct,    unit:''},
+  {k:'rent1',      g:'租金', n:'一居室月租',          type:'seq', fmt:money,  fmtShort:money,  unit:'/月'},
+  {k:'rent1_yoy',  g:'租金', n:'一居室租金同比',      type:'div', fmt:pct,    fmtShort:pct,    unit:''},
+  {k:'rent_flat',  g:'租金', n:'公寓月租',            type:'seq', fmt:money,  fmtShort:money,  unit:'/月'},
+  {k:'yield_flat', g:'收益', n:'公寓毛收益率',        type:'seq', fmt:pct2,   fmtShort:pct2,   unit:''},
+  {k:'yield_gross',g:'收益', n:'整体毛收益率',        type:'seq', fmt:pct2,   fmtShort:pct2,   unit:''},
+  {k:'yield_1bed_flat', g:'收益', n:'一居室租金 / 公寓价', type:'seq', fmt:pct2, fmtShort:pct2, unit:''},
+  {k:'rent_vs_price', g:'收益', n:'租售比 (2015-01=100)', type:'seq', fmt:v=>v.toFixed(1), fmtShort:v=>v.toFixed(0), unit:''}
+  ];
+  document.getElementById('strip').innerHTML = cells.map(c =>
+    '<div class="stat"><div class="lab">' + c[0] + '</div><div class="val num">' + c[1]
+    + '</div><div class="sub">' + c[2] + '</div></div>').join('');
+}
+function sign(v){ if(v === null) return '—';
+  return '<span class="' + (v >= 0 ? 'up' : 'dn') + '">' + pct(v) + '</span>'; }
+
+/* ---------------- detail panel ---------------- */
+function renderDetail(){
+  const code = st.sel || LDN, a = AREAS[code];
+  document.getElementById('dName').textContent = a.name;
+  document.getElementById('dCode').textContent = code;
+  document.getElementById('clearSel').hidden = !st.sel;
+  const i = st.mi;
+  const pi = val(code,'price',i) !== null ? i : lastIdxWith('price');
+  const ri = val(code,'rent',i) !== null ? i : lastIdxWith('rent');
+  const p95 = val(code,'price',0), pNow = val(code,'price',pi);
+  const r15 = val(code,'rent', firstIdxWith('rent')), rNow = val(code,'rent',ri);
+  const cells = [
+    ['均价 ' + MONTHS[pi], pNow === null ? '—' : money(pNow), sign(val(code,'price_yoy',pi)) + ' 同比'],
+    ['公寓均价', val(code,'flat_price',pi) === null ? '—' : money(val(code,'flat_price',pi)), sign(val(code,'flat_yoy',pi)) + ' 同比'],
+    ['月租 ' + MONTHS[ri], rNow === null ? '—' : money(rNow), sign(val(code,'rent_yoy',ri)) + ' 同比'],
+    ['一居室月租', val(code,'rent1',ri) === null ? '—' : money(val(code,'rent1',ri)), sign(val(code,'rent1_yoy',ri)) + ' 同比'],
+    ['公寓毛收益率', val(code,'yield_flat',ri) === null ? '—' : pct2(val(code,'yield_flat',ri)), '未扣费用'],
+    ['新建公寓中位价', val(code,'pf_new',pi) === null ? '—' : money(val(code,'pf_new',pi)),
+      val(code,'pf_prem',pi) === null ? '样本不足' : '较二手 ' + pct(val(code,'pf_prem',pi))],
+    ['二手公寓中位价', val(code,'pf_old',pi) === null ? '—' : money(val(code,'pf_old',pi)),
+      val(code,'pf_newshare',pi) === null ? '' : '新房占成交 ' + pctInt(val(code,'pf_newshare',pi))],
+    ['1995 以来涨幅', (p95 && pNow) ? '×' + (pNow/p95).toFixed(1) : '—', p95 ? '起点 ' + money(p95) : ''],
+    ['2015 以来租金', (r15 && rNow) ? '+' + ((rNow/r15 - 1)*100).toFixed(0) + '%' : '—', r15 ? '起点 ' + money(r15) + '/月' : '']
+  ];
+  document.getElementById('dStats').innerHTML = cells.map(c =>
+    '<div class="stat"><div class="lab">' + c[0] + '</div><div class="val num">' + c[1]
+    + '</div><div class="sub">' + c[2] + '</div></div>').join('');
+
+  const C = document.getElementById('charts');
+  C.innerHTML = '';
+  const cmp = st.sel ? LDN : null;
+  chart(C, '平均房价', [
+      series(code, 'price', a.name, 'var(--s1)'),
+      cmp ? series(cmp, 'price', '全伦敦', 'var(--ink-3)', true) : null
+    ], money, false);
+  chart(C, '平均月租', [
+      series(code, 'rent', a.name, 'var(--s2)'),
+      cmp ? series(cmp, 'rent', '全伦敦', 'var(--ink-3)', true) : null
+    ], v => money(v) + '/月', false);
+  chart(C, '同比变化 · 房价 vs 租金', [
+      series(code, 'price_yoy', '房价同比', 'var(--s1)'),
+      series(code, 'rent_yoy', '租金同比', 'var(--s2)')
+    ], pct, true, 'pct');
+  chart(C, '公寓中位成交价 · 新建 vs 二手（逐笔成交，季度）', [
+      series(code, 'pf_new', '新建公寓', 'var(--s2)'),
+      series(code, 'pf_old', '二手公寓', 'var(--s1)')
+    ], money, false);
+  chart(C, '新建公寓溢价', [
+      series(code, 'pf_prem', '公寓 · 新建 vs 二手', 'var(--s2)'),
+      series(code, 'new_premium', '全房型 · HPI 口径', 'var(--ink-3)', true)
+    ], pct, true, 'pct');
+  chart(C, '公寓毛收益率', [
+      series(code, 'yield_flat', a.name, 'var(--s3)'),
+      cmp ? series(cmp, 'yield_flat', '全伦敦', 'var(--ink-3)', true) : null
+    ], pct2, false, 'pct0');
+}
+function series(code, key, name, color, dash){
+  const s = AREAS[code] && AREAS[code][key];
+  if(!s) return null;
+  const pts = []; s.forEach((v,i) => { if(v !== null) pts.push([i,v]); });
+  return pts.length ? {name, color, pts, dash:!!dash, key, code} : null;
+}
+
+const CW = 700, CH = 132, CM = {t:10, r:10, b:18, l:46};
+function chart(parent, title, seriesList, fmt, zero, kind){
+  kind = kind || 'money';
+  const ss = seriesList.filter(Boolean);
+  const head = document.createElement('div');
+  head.className = 'chart-t';
+  head.innerHTML = '<span>' + title + '</span>'
+    + (ss.length > 1 ? '<span class="lgd">' + ss.map(s =>
+        '<span><i style="background:' + s.color + '"></i>' + s.name + '</span>').join('') + '</span>' : '');
+  parent.appendChild(head);
+  const wrap = document.createElement('div'); wrap.className = 'chartwrap'; parent.appendChild(wrap);
+  if(!ss.length){ wrap.innerHTML = '<div style="font-size:12px;color:var(--ink-3);padding:8px 0">无数据</div>'; return; }
+
+  let lo = Infinity, hi = -Infinity, i0 = Infinity, i1 = -Infinity;
+  ss.forEach(s => s.pts.forEach(([i,v]) => {
+    if(v < lo) lo = v; if(v > hi) hi = v; if(i < i0) i0 = i; if(i > i1) i1 = i; }));
+  if(zero){ lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  else if(lo > 0) lo = Math.min(lo, lo * 0.92);
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const X = i => CM.l + (i - i0) / Math.max(i1 - i0, 1) * (CW - CM.l - CM.r);
+  const Y = v => CM.t + (1 - (v - lo) / (hi - lo)) * (CH - CM.t - CM.b);
+
+  const ticks = niceTicks(lo, hi, 4);
+  let g = '';
+  ticks.forEach(t => { const y = Y(t).toFixed(1);
+    g += '<line class="gl" x1="' + CM.l + '" y1="' + y + '" x2="' + (CW - CM.r) + '" y2="' + y + '"/>'
+      +  '<text x="' + (CM.l - 6) + '" y="' + (+y + 3) + '" text-anchor="end">' + fmtTick(t, kind) + '</text>'; });
+  if(zero && lo < 0 && hi > 0){ const y = Y(0).toFixed(1);
+    g += '<line class="zl" x1="' + CM.l + '" y1="' + y + '" x2="' + (CW - CM.r) + '" y2="' + y + '"/>'; }
+  for(let y = Math.ceil(+MONTHS[i0].slice(0,4) / 5) * 5; y <= +MONTHS[i1].slice(0,4); y += 5){
+    const idx = MONTHS.indexOf(y + '-01'); if(idx < i0 || idx > i1) continue;
+    g += '<text x="' + X(idx).toFixed(1) + '" y="' + (CH - 4) + '" text-anchor="middle">' + y + '</text>';
+  }
+  ss.forEach(s => {
+    const d = s.pts.map(([i,v],k) => (k ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join('');
+    g += '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2" '
+      + 'stroke-linejoin="round" stroke-linecap="round"'
+      + (s.dash ? ' stroke-dasharray="4 3" opacity=".85"' : '') + '/>';
+    const last = s.pts[s.pts.length - 1];
+    g += '<circle cx="' + X(last[0]).toFixed(1) + '" cy="' + Y(last[1]).toFixed(1)
+      + '" r="3.2" fill="' + s.color + '" stroke="var(--surface)" stroke-width="1.6"/>';
+  });
+  g += '<g class="hov"><line class="cross" y1="' + CM.t + '" y2="' + (CH - CM.b) + '"/></g>';
+  wrap.innerHTML = '<svg class="chart" viewBox="0 0 ' + CW + ' ' + CH + '">' + g + '</svg>'
+    + '<div class="tip" hidden></div>';
+  attachHover(wrap, ss, X, Y, fmt, i0, i1);
+}
+function fmtTick(t, fmt){
+  const s = fmt(t);
+  return s.replace(/,\d{3}(?=\D|$)/g, m => (m === ',000' ? 'k' : m)).replace(/£(\d+)k/, '£$1k');
+}
+function niceTicks(lo, hi, n){
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1,2,2.5,5,10].map(m => m * mag).find(s => s >= raw) || mag * 10;
+  const out = []; for(let t = Math.ceil(lo / step) * step; t <= hi; t += step) out.push(+t.toFixed(6));
+  return out;
+}
+function attachHover(wrap, ss, X, Y, fmt, i0, i1){
+  const svgEl = wrap.querySelector('svg'), tip = wrap.querySelector('.tip');
+  const hov = svgEl.querySelector('.hov'), line = hov.querySelector('line');
+  const dots = ss.map(s => { const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('r', '4'); c.setAttribute('fill', s.color);
+    c.setAttribute('stroke', 'var(--surface)'); c.setAttribute('stroke-width', '2');
+    hov.appendChild(c); return c; });
+  function move(ev){
+    const r = svgEl.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width * CW;
+    const idx = Math.round(i0 + (px - CM.l) / (CW - CM.l - CM.r) * (i1 - i0));
+    const i = Math.max(i0, Math.min(i1, idx));
+    hov.classList.add('on'); line.setAttribute('x1', X(i)); line.setAttribute('x2', X(i));
+    let html = '<div class="tn">' + ymLabel(MONTHS[i]) + '</div>';
+    ss.forEach((s,k) => {
+      const p = nearest(s.pts, i);
+      if(!p){ dots[k].setAttribute('opacity', '0'); return; }
+      dots[k].setAttribute('opacity', '1');
+      dots[k].setAttribute('cx', X(p[0])); dots[k].setAttribute('cy', Y(p[1]));
+      html += '<div class="tx" style="color:var(--ink-2)"><span style="color:' + s.color
+        + '">●</span> ' + s.name + ' <b class="num">' + fmt(p[1]) + '</b></div>';
+    });
+    tip.innerHTML = html; tip.hidden = false;
+    const left = Math.max(0, Math.min(wrap.clientWidth - 160, X(i) / CW * wrap.clientWidth - 78));
+    tip.style.left = left + 'px'; tip.style.top = '-4px';
+  }
+  svgEl.addEventListener('mousemove', move);
+  svgEl.addEventListener('mouseleave', () => { hov.classList.remove('on'); tip.hidden = true; });
+}
+function nearest(pts, i){
+  let best = null, bd = 1e9;
+  for(const p of pts){ const d = Math.abs(p[0] - i); if(d < bd){ bd = d; best = p; } }
+  return bd <= 4 ? best : null;
+}
+
+/* ---------------- interactions ---------------- */
+const tip = document.getElementById('tip');
+svg.addEventListener('mousemove', ev => {
+  const t = ev.target.closest('path.b'); if(!t){ tip.hidden = true; return; }
+  const code = t.dataset.code, m = MBY[st.metric], v = val(code, m.k, st.mi);
+  const box = svg.parentElement.getBoundingClientRect();
+  tip.innerHTML = '<div class="tn">' + shapes[code].name + '</div>'
+    + '<div class="tv num">' + (v === null ? '无数据' : m.fmt(v) + m.unit) + '</div>'
+    + '<div class="tx">' + m.n + ' · ' + ymLabel(MONTHS[st.mi]) + '</div>';
+  tip.hidden = false;
+  const x = ev.clientX - box.left + 14, y = ev.clientY - box.top + 12;
+  tip.style.left = Math.min(x, box.width - tip.offsetWidth - 6) + 'px';
+  tip.style.top = Math.min(y, box.height - tip.offsetHeight - 6) + 'px';
+});
+svg.addEventListener('mouseleave', () => { tip.hidden = true; });
+svg.addEventListener('click', ev => {
+  const t = ev.target.closest('path.b'); if(!t) return;
+  select(st.sel === t.dataset.code ? null : t.dataset.code);
+});
+document.getElementById('rank').addEventListener('click', ev => {
+  const r = ev.target.closest('.row'); if(r) select(st.sel === r.dataset.code ? null : r.dataset.code);
+});
+document.getElementById('rank').addEventListener('keydown', ev => {
+  if(ev.key !== 'Enter' && ev.key !== ' ') return;
+  const r = ev.target.closest('.row'); if(r){ ev.preventDefault(); select(r.dataset.code); }
+});
+document.getElementById('clearSel').addEventListener('click', () => select(null));
+function select(code){ st.sel = code; renderMap(); renderRank(); renderDetail(); }
+
+const sel = document.getElementById('metric');
+let lastG = '';
+METRICS.forEach(m => {
+  if(m.g !== lastG){ lastG = m.g;
+    const og = document.createElement('optgroup'); og.label = m.g; og.id = 'og-' + m.g; sel.appendChild(og); }
+  const o = document.createElement('option'); o.value = m.k; o.textContent = m.n;
+  sel.lastChild.appendChild(o);
+});
+sel.value = st.metric;
+sel.addEventListener('change', () => {
+  st.metric = sel.value;
+  const m = MBY[st.metric], f = firstIdxWith(m.k), l = lastIdxWith(m.k);
+  const s = document.getElementById('slider');
+  s.min = f; s.max = l;
+  if(st.mi < f || st.mi > l) st.mi = l;
+  s.value = st.mi;
+  document.querySelectorAll('#scaleSeg button').forEach(b => b.disabled = (m.type === 'div'));
+  renderAll();
+});
+function segHandler(id, key, cast){
+  document.getElementById(id).addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if(!b || b.disabled) return;
+    document.querySelectorAll('#' + id + ' button').forEach(x =>
+      x.setAttribute('aria-pressed', String(x === b)));
+    st[key] = cast(b.dataset.v); renderMap();
+  });
+}
+segHandler('scaleSeg', 'scale', v => v);
+segHandler('labSeg', 'labels', v => v === 'on');
+
+const slider = document.getElementById('slider');
+slider.addEventListener('input', () => { st.mi = +slider.value; renderAll(); });
+const playBtn = document.getElementById('play');
+playBtn.addEventListener('click', () => {
+  st.playing = !st.playing;
+  playBtn.innerHTML = st.playing ? '&#10073;&#10073;' : '&#9654;';
+  if(st.playing){
+    st.timer = setInterval(() => {
+      const max = +slider.max, min = +slider.min;
+      st.mi = st.mi >= max ? min : st.mi + 1;
+      slider.value = st.mi; renderAll();
+    }, 110);
+  } else clearInterval(st.timer);
+});
+document.getElementById('theme').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const dark = cur ? cur === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+});
+
+function renderAll(){
+  document.getElementById('dateLab').textContent = MONTHS[st.mi];
+  renderMap(); renderRank(); renderStrip(); renderDetail();
+}
+/* ---------------- submarket layer ---------------- */
+const SM = DATA.submarkets || {}, LF = DATA.london_flat || {};
+function baseIndex(arr, years, base){
+  let bi = years.indexOf(base);
+  if(bi < 0 || arr[bi] === null){
+    bi = arr.findIndex(v => v !== null);
+    if(bi < 0) return null;
+  }
+  const b = arr[bi];
+  return arr.map(v => v === null ? null : v / b * 100);
+}
+function latestWith(arr, years, nArr, nmin){
+  for(let i = arr.length - 1; i >= 0; i--)
+    if(arr[i] !== null && (!nArr || (nArr[i] || 0) >= nmin)) return i;
+  return -1;
+}
+function renderSub(){
+  const names = Object.keys(SM);
+  if(!names.length){ document.getElementById('subSection').hidden = true; return; }
+  const years = LF.years, X0 = years.indexOf(2010);
+  const lonIdx = baseIndex(LF.old_med, years, 2015);
+  const idx = {}; names.forEach(n => idx[n] = baseIndex(SM[n].old_med, years, 2015));
+  let lo = 1e9, hi = -1e9;
+  [...Object.values(idx), lonIdx].forEach(a => a && a.forEach((v,i) => {
+    if(v === null || i < X0) return; if(v < lo) lo = v; if(v > hi) hi = v; }));
+  lo = Math.floor(lo / 10) * 10; hi = Math.ceil(hi / 10) * 10;
+
+  const PW = 210, PH = 86, M = {t:7, r:6, b:13, l:22};
+  const px = i => M.l + (i - X0) / (years.length - 1 - X0) * (PW - M.l - M.r);
+  const py = v => M.t + (1 - (v - lo) / (hi - lo)) * (PH - M.t - M.b);
+  const line = (a, color, dash) => {
+    let d = '', open = false;
+    a.forEach((v,i) => { if(i < X0) return;
+      if(v === null){ open = false; return; }
+      d += (open ? 'L' : 'M') + px(i).toFixed(1) + ' ' + py(v).toFixed(1); open = true; });
+    return d ? '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="'
+      + (dash ? 1.6 : 2) + '" stroke-linejoin="round"'
+      + (dash ? ' stroke-dasharray="3 2.5" opacity=".8"' : '') + '/>' : '';
+  };
+  const order = names.slice().sort((a,b) => {
+    const ia = idx[a], ib = idx[b];
+    const la = ia ? ia[latestWith(SM[a].old_med, years, SM[a].old_n, 20)] : 0;
+    const lb = ib ? ib[latestWith(SM[b].old_med, years, SM[b].old_n, 20)] : 0;
+    return (lb || 0) - (la || 0);
+  });
+  document.getElementById('subGrid').innerHTML = order.map(n => {
+    const m = SM[n], a = idx[n];
+    const li = latestWith(m.old_med, years, m.old_n, 20);
+    let g = '';
+    g += '<line class="zl" x1="' + M.l + '" y1="' + py(100).toFixed(1) + '" x2="' + (PW - M.r)
+       + '" y2="' + py(100).toFixed(1) + '"/>';
+    g += '<text class="idx" x="' + (M.l - 4) + '" y="' + (py(hi) + 3).toFixed(1)
+       + '" text-anchor="end" fill="var(--ink-3)">' + hi + '</text>';
+    g += '<text class="idx" x="' + (M.l - 4) + '" y="' + (py(100) + 3).toFixed(1)
+       + '" text-anchor="end" fill="var(--ink-3)">100</text>';
+    g += '<text class="idx" x="' + (M.l - 4) + '" y="' + (py(lo) + 3).toFixed(1)
+       + '" text-anchor="end" fill="var(--ink-3)">' + lo + '</text>';
+    [2012, 2018, 2024].forEach(y => { const i = years.indexOf(y); if(i < X0) return;
+      g += '<text class="idx" x="' + px(i).toFixed(1) + '" y="' + (PH - 3)
+         + '" text-anchor="middle" fill="var(--ink-3)">' + y + '</text>'; });
+    g += line(lonIdx, 'var(--ink-3)', true) + line(a, 'var(--s1)', false);
+    if(li >= 0 && a){
+      g += '<circle cx="' + px(li).toFixed(1) + '" cy="' + py(a[li]).toFixed(1)
+         + '" r="3" fill="var(--s1)" stroke="var(--surface-2)" stroke-width="1.5"/>';
+    }
+    const cur = li >= 0 ? m.old_med[li] : null;
+    return '<div class="smp"><h3>' + n + '</h3><div class="meta">' + m.district
+      + ' · ' + m.sectors + (cur ? ' · ' + money(cur) + ' (' + years[li] + ')' : '')
+      + '</div><svg viewBox="0 0 ' + PW + ' ' + PH + '">' + g + '</svg></div>';
+  }).join('');
+
+  // ---- comparison table
+  const rows = order.map(n => {
+    const m = SM[n];
+    const li = latestWith(m.old_med, years, m.old_n, 20);
+    const i19 = years.indexOf(2019), i15 = years.indexOf(2015);
+    const ni = latestWith(m.new_med, years, m.new_n, 15);
+    const rent1 = m.code ? val(m.code, 'rent1', lastIdxWith('rent1')) : null;
+    const cur = li >= 0 ? m.old_med[li] : null;
+    const chg = (a, b) => (a !== null && b) ? (a / b - 1) * 100 : null;
+    return {n, m, li, cur,
+      v19: chg(cur, m.old_med[i19]), v15: chg(cur, m.old_med[i15]),
+      ni, newv: ni >= 0 ? m.new_med[ni] : null,
+      prem: (ni >= 0 && m.old_med[ni]) ? (m.new_med[ni] / m.old_med[ni] - 1) * 100 : null,
+      rent1, yld: (rent1 && cur) ? rent1 * 12 / cur * 100 : null};
+  });
+  const head = ['片区', 'Borough', '二手公寓中位价', 'vs 2019', 'vs 2015',
+                '新建中位价', '新建溢价', '该区一居室月租', '隐含毛收益'];
+  const sgn = v => v === null ? '—'
+    : '<span class="' + (v >= 0 ? 'up' : 'dn') + '">' + pct(v) + '</span>';
+  document.getElementById('subTable').innerHTML =
+    '<thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>'
+    + rows.map(r => '<tr><td>' + r.n + '</td><td>' + r.m.district + '</td>'
+      + '<td class="n">' + (r.cur ? money(r.cur) : '—')
+      + ' <span style="color:var(--ink-3);font-size:11px">' + (r.li >= 0 ? years[r.li] : '') + '</span></td>'
+      + '<td class="n">' + sgn(r.v19) + '</td><td class="n">' + sgn(r.v15) + '</td>'
+      + '<td class="n">' + (r.newv ? money(r.newv) : '—')
+      + ' <span style="color:var(--ink-3);font-size:11px">' + (r.ni >= 0 ? years[r.ni] : '') + '</span></td>'
+      + '<td class="n">' + (r.prem === null ? '—' : pct(r.prem)) + '</td>'
+      + '<td class="n">' + (r.rent1 ? money(r.rent1) : '—') + '</td>'
+      + '<td class="n">' + (r.yld === null ? '—' : pct2(r.yld)) + '</td></tr>').join('')
+    + '</tbody>';
+
+  document.getElementById('subNote').innerHTML =
+    '这十个片区按 postcode sector 聚合（每格下方标出），不是官方行政区划。指数用<b>二手公寓</b>而非新建公寓，'
+    + '因为新建中位价受交付批次影响极大——一栋 studio 楼盘集中交付就能把中位价拉低两成，而实际并无重新定价。'
+    + '<b>新建中位价一列停在 ' + (years[Math.max(...rows.map(r => r.ni))] || '—') + ' 前后，是因为新房登记有滞后，'
+    + '最近一两年的新房成交尚未进入 Land Registry。</b> 租金为所属 borough 的一居室水平（ONS 无片区级租金），'
+    + '隐含毛收益 = 该 borough 一居室月租 × 12 ÷ 该片区二手公寓中位价，跨源近似，未扣 service charge 与空置。';
+}
+renderSub();
+
+/* boot */
+document.getElementById('vintage').textContent =
+  '房价至 ' + DATA.meta.hpi_vintage.split(' ')[0] + ' · 租金至 ' + DATA.meta.pipr_vintage.split(' ')[0];
+(function initSlider(){
+  const m = MBY[st.metric], f = firstIdxWith(m.k), l = lastIdxWith(m.k);
+  slider.min = f; slider.max = l; st.mi = l; slider.value = l;
+  document.querySelectorAll('#scaleSeg button').forEach(b => b.disabled = (m.type === 'div'));
+})();
+renderAll();
+})();
+</script>
+
+</body></html>
