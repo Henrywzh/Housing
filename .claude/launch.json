@@ -1,0 +1,9 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "housing",
+      "runtimeExecutable": "/Users/henrywzh/.pyenv/versions/3.11.9/bin/python3",
+      "runtimeArgs": ["-m","http.server","8731","--directory","/Users/henrywzh/Desktop/Python/Housing"],
+      "port": 8731 }
+  ]
+}

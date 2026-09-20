@@ -1,0 +1,10 @@
+# Raw downloads: ~334MB, all re-fetchable via scripts/fetch_*.py
+data/raw/
+
+# Derived: rebuilt by scripts/build_dataset.py in seconds
+data/processed/
+london_housing_map.html
+
+.DS_Store
+__pycache__/
+*.pyc
