@@ -72,33 +72,49 @@ def stage1(tok):
 
     Searching by postcode beats crawling whole boroughs: ~2,800 small requests
     instead of ~300 pages of 2MB, and nothing is fetched for postcodes with no
-    transactions. (A postcode with no certificates returns 404; that is normal
-    and not an error.)
+    transactions. (A postcode with no certificates returns 404; that is normal.)
+
+    Checkpointed every 250 postcodes and resumable, because an hour of requests
+    is too much to lose to one crash.
     """
+    import threading
     import pandas as pd
     d = pd.read_csv(RAW / "london_ppd.csv", usecols=["postcode", "ppd_cat"], dtype=str)
     d = d[d["ppd_cat"] == "A"].dropna(subset=["postcode"])
     d = d[d["postcode"].map(sector_of).isin(SECTORS)]
     pcs = sorted(d["postcode"].unique())
-    print(f"stage 1: {len(pcs):,} postcodes to query", flush=True)
 
-    keep, done, miss = [], [0], [0]
+    ckpt = EPC / "epc_index_partial.json"
+    state = json.loads(ckpt.read_text()) if ckpt.exists() else {"done": [], "rows": []}
+    seen = set(state["done"])
+    keep = state["rows"]
+    todo = [p for p in pcs if p not in seen]
+    print(f"stage 1: {len(pcs):,} postcodes, {len(seen):,} already done, "
+          f"{len(todo):,} to query", flush=True)
+
+    lock, n = threading.Lock(), [0]
 
     def one(pc):
         r = call("/api/domestic/search", {"postcode": pc}, tok)
-        done[0] += 1
-        if done[0] % 250 == 0:
-            print(f"  {done[0]:,}/{len(pcs):,} — {len(keep):,} certs, "
-                  f"{miss[0]:,} postcodes with none", flush=True)
-        if not r:
-            miss[0] += 1
-            return []
-        return r.get("data") or []
+        rows = (r or {}).get("data") or []
+        with lock:
+            keep.extend(rows)
+            seen.add(pc)
+            n[0] += 1
+            if n[0] % 250 == 0:
+                ckpt.write_text(json.dumps({"done": sorted(seen), "rows": keep}))
+                print(f"  {n[0]:,}/{len(todo):,} — {len(keep):,} certs", flush=True)
 
     with ThreadPoolExecutor(max_workers=8) as ex:
-        for rows in ex.map(one, pcs):
-            keep.extend(rows)
+        list(ex.map(one, todo))
+
     out = EPC / "epc_index.json"
+    out.write_text(json.dumps(keep))
+    ckpt.write_text(json.dumps({"done": sorted(seen), "rows": keep}))
+    print(f"stage 1: {len(keep):,} certificates -> {out}", flush=True)
+    return keep
+
+
 def nums(t):
     return "|".join(sorted(re.findall(r"\d+", str(t or "").upper())))
 

@@ -371,6 +371,13 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div class="lsoamul" id="lsoaGrid"></div>
   </section>
 
+  <section class="card detail" id="psfSection">
+    <div class="dhead"><h2>每平尺 · 新建溢价的真实构成</h2>
+      <span class="code">Price Paid × EPC 面积 · 2022–2026</span></div>
+    <p class="subnote" id="psfNote"></p>
+    <div class="tablewrap"><table class="soctbl" id="psfTable"></table></div>
+  </section>
+
   <section class="card detail" id="yieldSection">
     <div class="dhead"><h2>毛收益试算</h2>
       <span class="code">用你自己看到的挂牌数字</span></div>
@@ -1292,6 +1299,39 @@ function renderDist(){
       }).join('') + '</tbody>';
 }
 renderDist();
+
+/* ---------------- £ per square foot ---------------- */
+function renderPsf(){
+  const P = DATA.psf || {};
+  const rows = Object.entries(P).filter(([, r]) => r.psf_new !== null || r.psf_existing !== null);
+  if(!rows.length){ document.getElementById('psfSection').hidden = true; return; }
+  const head = ['片区','新建 £/sqft','二手 £/sqft','新建面积㎡','二手面积㎡',
+                '溢价 · 每套','溢价 · 每平尺','面积差','新建 n','二手 n'];
+  const c = (v, f) => '<td class="n">' + (v === null || v === undefined ? '—' : f(v)) + '</td>';
+  const sgn = v => v === null || v === undefined ? '—'
+    : '<span class="' + (v >= 0 ? 'up' : 'dn') + '">' + pct(v) + '</span>';
+  document.getElementById('psfTable').innerHTML =
+    '<thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>'
+    + rows.sort((a,b) => (b[1].psf_existing || 0) - (a[1].psf_existing || 0))
+        .map(([n,r]) => '<tr><td>' + n + '</td>'
+          + c(r.psf_new, v => '£' + num0(v)) + c(r.psf_existing, v => '£' + num0(v))
+          + c(r.sqm_new, num0) + c(r.sqm_existing, num0)
+          + '<td class="n">' + sgn(r['溢价_每套%']) + '</td>'
+          + '<td class="n">' + sgn(r['溢价_每平尺%']) + '</td>'
+          + '<td class="n">' + sgn(r['面积差%']) + '</td>'
+          + c(r.n_new, cnt) + c(r.n_existing, cnt) + '</tr>').join('')
+    + '</tbody>';
+  document.getElementById('psfNote').innerHTML =
+    'Land Registry 没有面积，EPC 没有价格，两边按 postcode + 地址数字 token 唯一匹配后才有每平尺。'
+    + '<b>“溢价·每套”和“溢价·每平尺”的差额，就是你为多出来的面积付的钱，不是为“新”付的钱。</b>'
+    + 'Battersea Power Station 每套贵 52%，每平尺只贵 12%——新房比二手大 21%。'
+    + 'Canning Town 反过来：每套贵 24%，每平尺贵 31%，因为新房比二手<b>小 13%</b>。'
+    + '<br>已剔除 1,414 笔疑似<b>共有产权</b>成交（Land Registry 记的是买下份额的价，不是房子的价；'
+    + '份额通常 25–40%，在每平尺分布上形成清晰低峰，按各片区各年上四分位数的一半切分）。'
+    + '<b>匹配率 42.7%，但新建 55.2%、二手 31.4%</b>——2008 年 EPC 强制前从未出售或出租过的老房子没有证书，'
+    + '所以二手样本偏向近年流通过的房子，这个偏差无法消除，读数时请记住。';
+}
+renderPsf();
 
 /* ---------------- LSOA-level crime inside each submarket ---------------- */
 function renderLsoa(){

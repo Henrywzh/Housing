@@ -76,7 +76,25 @@ def main():
     m["sqft"] = m["area_sqm"] * SQFT
     m["psf"] = m["price"] / m["sqft"]
     m.loc[(m["psf"] < 100) | (m["psf"] > 5000), "psf"] = np.nan
+
+    # Shared-ownership sales are recorded by Land Registry at the price paid for
+    # the SHARE, not the value of the flat, and in the regeneration areas they
+    # are numerous enough to drag a median into the wrong mode: Nine Elms
+    # one-beds split cleanly into 17 sales at £226-326/sqft on Sleaford Street
+    # and 13 at £999-1,766/sqft around Embassy Gardens. A share is typically
+    # 25-40%, so anything under half the local upper quartile is not a
+    # full-market price. The cut is per market and year so it follows the
+    # local level rather than imposing one national threshold.
+    ref = m.groupby(["market", "year"])["psf"].transform(lambda s: s.quantile(.75))
+    m["shared_ownership_likely"] = m["psf"] < ref * 0.5
+    n_so = int(m["shared_ownership_likely"].sum())
+    by_mkt = (m[m["shared_ownership_likely"]].groupby("market").size()
+              .sort_values(ascending=False))
+    m.loc[m["shared_ownership_likely"], "psf"] = np.nan
     hit = m["psf"].notna()
+    print(f"dropped as part-share sales     : {n_so:,}")
+    if len(by_mkt):
+        print("  " + ", ".join(f"{k} {v}" for k, v in by_mkt.head(8).items()))
 
     print(f"flat transactions in sectors : {len(m):,}")
     print(f"matched with a floor area    : {hit.sum():,}  ({hit.mean()*100:.1f}%)")
@@ -95,8 +113,10 @@ def main():
               "sqm_new", "sqm_existing", "price_new", "price_existing"):
         if c not in w:
             w[c] = np.nan
-    w.loc[(w["n_new"] < 20) | (w["n_existing"] < 20),
-          ["psf_new", "psf_existing"]] = np.nan
+    # suppress each side on its own sample -- a thin resale count is no reason
+    # to hide a new-build figure built on hundreds of sales
+    w.loc[w["n_new"] < 20, ["psf_new", "sqm_new", "price_new"]] = np.nan
+    w.loc[w["n_existing"] < 20, ["psf_existing", "sqm_existing", "price_existing"]] = np.nan
     w["溢价_每套%"] = (w["price_new"] / w["price_existing"] - 1) * 100
     w["溢价_每平尺%"] = (w["psf_new"] / w["psf_existing"] - 1) * 100
     w["面积差%"] = (w["sqm_new"] / w["sqm_existing"] - 1) * 100

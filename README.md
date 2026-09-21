@@ -62,10 +62,18 @@ Replace the two files in `data/raw/` after the ONS release, then rerun
   HPI. One tower of studios completing moves a borough's new-build median
   without anything repricing — always read the `n` column alongside.
 * New-build registrations lag; the most recent two quarters are incomplete.
-* Price Paid has no floor area. `scripts/match_epc.py` fixes this by joining
-  EPC, but the EPC bulk extract now sits behind GOV.UK One Login, so it cannot
-  be fetched unattended — see `data/raw/epc/README.md`. Until it is in place,
-  every "new-build premium" here compares whole flats, not floor space.
+* £/sqft comes from joining EPC floor areas onto transactions
+  (`scripts/fetch_epc.py` then `scripts/build_psf.py`). The match rate is 42.7%
+  overall but **55.2% for new-build against 31.4% for existing**: a home that
+  has never been sold or let since EPCs became compulsory in 2008 has no
+  certificate. The resale side is therefore skewed toward recently traded
+  stock, and that bias cannot be removed.
+* Land Registry records a shared-ownership sale at the price paid for the
+  **share**, not the value of the flat. In these regeneration areas that is
+  enough to move a median into the wrong mode — Nine Elms one-beds split into
+  17 sales at £226-326/sqft and 13 at £999-1,766/sqft. `build_psf.py` drops
+  anything below half the local upper quartile (1,414 transactions) and prints
+  what it removed per submarket.
 * Crime locations are snapped to anonymised points: reliable over an area,
   meaningless for one street.
 * Crime rates use resident population as the denominator. Areas with large

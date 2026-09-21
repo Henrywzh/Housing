@@ -292,6 +292,26 @@ lg = RAW / "lsoa_sub_bgc.geojson"
 if lg.exists():
     lsoa_geo = json.loads(lg.read_text())
 
+# --------------------------------------------------------- £ per square foot
+# EPC floor area joined onto transactions. This is the only cut that separates
+# "costs more because it is bigger" from "costs more because it is new".
+psf = {}
+pf = OUT / "psf_submarket.csv"
+if pf.exists():
+    d = pd.read_csv(pf).set_index("market")
+    yr = pd.read_csv(OUT / "psf_submarket_year.csv").set_index("market")
+    years = [c for c in yr.columns if c.isdigit()]
+    for k, r in d.iterrows():
+        rec = {c: (None if pd.isna(r[c]) else round(float(r[c]), 1))
+               for c in ("psf_new", "psf_existing", "sqm_new", "sqm_existing",
+                         "price_new", "price_existing", "n_new", "n_existing",
+                         "溢价_每套%", "溢价_每平尺%", "面积差%") if c in d.columns}
+        rec["years"] = [int(y) for y in years]
+        rec["psf_year"] = [None if pd.isna(yr.loc[k, y]) else round(float(yr.loc[k, y]))
+                           for y in years] if k in yr.index else []
+        psf[k] = rec
+    print(f"psf layer        : {len(psf)} submarkets")
+
 geo = json.loads(GEO_FILE.read_text())
 payload = {
     "months": months,
@@ -299,6 +319,7 @@ payload = {
     "submarkets": submarkets,
     "social": social,
     "lsoa": lsoa,
+    "psf": psf,
     "lsoa_geo": lsoa_geo,
     "social_sub": social_sub,
     "london_flat": london_flat,
