@@ -40,7 +40,9 @@ scripts/fetch_ppd.py            # streams 5.5GB of PPD, keeps Greater London (~2
 scripts/build_ppd_aggregates.py # borough x quarter x seg x build; 10 submarkets
 scripts/build_dataset.py        # merges HPI + PIPR + PPD -> data/processed/
 scripts/fetch_crime.py          # crime by borough and submarket polygon
+scripts/fetch_crime_lsoa.py     # crime at LSOA level inside the submarkets
 scripts/build_social.py         # crime + ethnicity + earnings, borough & submarket
+scripts/match_epc.py            # joins EPC floor area onto transactions -> £/sqft
 scripts/build_site.py           # inlines the data into web/template.html
 ```
 
@@ -60,8 +62,10 @@ Replace the two files in `data/raw/` after the ONS release, then rerun
   HPI. One tower of studios completing moves a borough's new-build median
   without anything repricing — always read the `n` column alongside.
 * New-build registrations lag; the most recent two quarters are incomplete.
-* Price Paid has no floor area, so the new-build premium is **not** a
-  like-for-like per-sqft comparison.
+* Price Paid has no floor area. `scripts/match_epc.py` fixes this by joining
+  EPC, but the EPC bulk extract now sits behind GOV.UK One Login, so it cannot
+  be fetched unattended — see `data/raw/epc/README.md`. Until it is in place,
+  every "new-build premium" here compares whole flats, not floor space.
 * Crime locations are snapped to anonymised points: reliable over an area,
   meaningless for one street.
 * Crime rates use resident population as the denominator. Areas with large
