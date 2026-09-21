@@ -192,11 +192,72 @@ if sm_path.exists():
     }
     print(f"submarkets       : {len(submarkets)}  years {YEARS[0]}..{YEARS[-1]}")
 
+# ------------------------------------------ crime / ethnicity / earnings layer
+# These are point-in-time, not monthly series: the census is 2021, ASHE is one
+# year, crime is a 12-month window. They ride alongside the monthly panel rather
+# than inside it, and the UI locks the timeline when one of them is selected.
+social, social_sub = {}, {}
+sb = OUT / "social_borough.csv"
+if sb.exists():
+    name2code = (hpi[["name", "code"]].drop_duplicates()
+                 .assign(key=lambda d: d["name"].str.upper()).set_index("key")["code"].to_dict())
+    ALIAS = {"WESTMINSTER": "CITY OF WESTMINSTER"}
+    b = pd.read_csv(sb)
+    b["code"] = b["la_name"].str.upper().replace(ALIAS).map(name2code)
+    miss = sorted(b.loc[b["code"].isna(), "la_name"].unique())
+    if miss:
+        print("WARN unmatched social boroughs:", miss)
+    ETH_BASE = ["white", "asian", "black", "mixed", "other"]
+    keep = ([c for c in b.columns if c.endswith("_pct") or c.endswith("_k")]
+            + ["pop", "hh_income_total", "hh_income_ahc", "pay_resident", "pay_workplace"])
+    for _, r in b.dropna(subset=["code"]).iterrows():
+        rec = {k: (None if pd.isna(r[k]) else round(float(r[k]), 2))
+               for k in keep if k in b.columns}
+        if "eth_detail" in b.columns:
+            rec["eth_detail"] = json.loads(r["eth_detail"])
+        social[r["code"]] = rec
+    # a London-wide row, so the default panel is not blank; rates are recomputed
+    # from the summed counts rather than averaged, which would weight by borough
+    tot = b.dropna(subset=["code"])
+    pop = tot["pop"].sum()
+    ldn = {"pop": float(pop)}
+    for c in ETH_BASE:
+        if c in tot: ldn[c + "_pct"] = round(tot[c].sum() / pop * 100, 2)
+    for c in [c for c in tot.columns if c.startswith("crime_") and not c.endswith("_k")]:
+        ldn[c + "_k"] = round(tot[c].sum() / pop * 1000, 2)
+    for c in ("hh_income_total", "hh_income_ahc", "pay_resident", "pay_workplace"):
+        if c in tot:
+            wgt = (tot[c] * tot["pop"]).sum() / tot.loc[tot[c].notna(), "pop"].sum()
+            ldn[c] = round(float(wgt), 2)
+    det = {}
+    for _, r in tot.iterrows():
+        for d in json.loads(r["eth_detail"]) if "eth_detail" in tot.columns else []:
+            det[d["g"]] = det.get(d["g"], 0) + d["pct"] * r["pop"]
+    ldn["eth_detail"] = [{"g": g, "pct": round(v / pop, 1)}
+                         for g, v in sorted(det.items(), key=lambda x: -x[1])[:6]]
+    social["E12000007"] = ldn
+
+    ss = OUT / "social_submarket.csv"
+    if ss.exists():
+        sm = pd.read_csv(ss)
+        for _, r in sm.iterrows():
+            rec = {k: (None if pd.isna(r.get(k)) else round(float(r[k]), 2))
+                   for k in keep if k in sm.columns}
+            if "eth_detail" in sm.columns:
+                rec["eth_detail"] = json.loads(r["eth_detail"])
+            rec["borough"] = r["borough"]
+            rec["msoa_names"] = r["msoa_names"]
+            rec["n_msoa"] = int(r["n_msoa"])
+            social_sub[r["submarket"]] = rec
+    print(f"social layer     : {len(social)} boroughs, {len(social_sub)} submarkets")
+
 geo = json.loads(GEO_FILE.read_text())
 payload = {
     "months": months,
     "areas": areas,
     "submarkets": submarkets,
+    "social": social,
+    "social_sub": social_sub,
     "london_flat": london_flat,
     "meta": {
         "hpi_vintage": "2026-07 (HM Land Registry UK HPI, published 2026-09-16)",

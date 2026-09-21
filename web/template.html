@@ -10,7 +10,7 @@
   --line:#dbe1e9; --line-strong:#c3ccd7;
   --ink:#0d1419; --ink-2:#4b5762; --ink-3:#78838f;
   --accent:#2a78d6; --accent-soft:#e8f0fc;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
   --pos:#0ca30c; --neg:#d03b3b;
   --nodata:#e6e9ee; --nodata-ink:#8d97a2;
   --seq-1:#e3edfb; --seq-2:#c2d9f6; --seq-3:#9ec5f4; --seq-4:#6da7ec;
@@ -27,7 +27,7 @@
     --line:#2a333f; --line-strong:#3a4652;
     --ink:#f1f4f8; --ink-2:#b2bdc8; --ink-3:#7d8895;
     --accent:#3987e5; --accent-soft:#1a2b42;
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s4:#c98500; --s5:#d55181;
     --pos:#0ca30c; --neg:#e06a6a;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35);
     --map-plate:#e7ebf1;
@@ -39,7 +39,7 @@
   --line:#2a333f; --line-strong:#3a4652;
   --ink:#f1f4f8; --ink-2:#b2bdc8; --ink-3:#7d8895;
   --accent:#3987e5; --accent-soft:#1a2b42;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
   --pos:#0ca30c; --neg:#e06a6a;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.35);
   --map-plate:#e7ebf1;
@@ -84,6 +84,7 @@ h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.01em}
 .seg{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
 .seg button{border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;
             padding:6px 11px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.seg button:disabled{opacity:.4;cursor:default}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:500;box-shadow:var(--shadow)}
 .seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
 select{font:inherit;font-size:13px;background:var(--surface);color:var(--ink);
@@ -210,6 +211,16 @@ table.sm-t tbody tr.sel td:first-child{font-weight:600}
 .sm-prem .pb{width:62px;height:11px;background:var(--surface-3);border-radius:3px;position:relative;flex:none}
 .sm-prem .pb i{position:absolute;top:0;bottom:0;border-radius:3px}
 .sm-thin{color:var(--ink-3)}
+.ethbar{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;margin:6px 0 5px}
+.ethbar i{display:block;height:100%}
+.ethkey{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink-3)}
+.ethkey span{display:flex;align-items:center;gap:4px}
+.ethkey i{width:9px;height:9px;border-radius:2px;display:block}
+.ethdet{margin-top:3px;gap:9px;font-size:10.5px;opacity:.9}
+.ethdet b{color:var(--ink-2);font-weight:500}
+.socblock{padding:12px 16px 4px;display:grid;gap:3px}
+.socblock h3{margin:0;font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.soctbl{min-width:900px}
 footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);
         font-size:12px;color:var(--ink-3);display:grid;gap:7px}
 footer b{color:var(--ink-2);font-weight:500}
@@ -250,6 +261,7 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
       <div class="seg" id="scaleSeg">
         <button type="button" data-v="global" aria-pressed="true">全历史固定</button>
         <button type="button" data-v="month" aria-pressed="false">当月拉伸</button>
+        <button type="button" data-v="quantile" aria-pressed="false">分位数</button>
       </div>
     </label>
     <label class="fld"><span>地图标注</span>
@@ -324,6 +336,13 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div class="charts" id="smCharts"></div>
   </section>
 
+  <section class="card detail" id="socSection">
+    <div class="dhead"><h2>片区 · 治安、收入与人口构成</h2>
+      <span class="code">Census 2021 · ONS 小区域收入 FYE2023 · data.police.uk 近12个月</span></div>
+    <p class="subnote" id="socNote"></p>
+    <div class="tablewrap"><table class="soctbl" id="socTable"></table></div>
+  </section>
+
   <footer>
     <div><b>房价</b> HM Land Registry / ONS UK House Price Index，月度，1995-01 起，成交价回归模型，覆盖全部成交（含现金）。</div>
     <div><b>租金</b> ONS Price Index of Private Rents (PIPR)，月度，2015-01 起，估算的是<b>全部在租存量</b>的平均租金，不是当月新挂牌租金，因此低于 Rightmove 的 asking rent。</div>
@@ -331,6 +350,9 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div><b>公寓 · 逐笔成交</b> Land Registry Price Paid Data，1995 起每一笔成交，是唯一同时带房型、新房标志与完整 postcode 的源——HPI 分别发布公寓序列和新房序列，但从不交叉。这里是<b>中位成交价</b>，非 HPI 的混合调整口径：某季度一栋 studio 楼盘集中交付就会把新房中位价拉低，读数时请一并看成交量。已剔除 Category B（法拍、批量过户、right-to-buy）；单季新房或二手样本少于 10 笔的中位数按无数据处理；新房登记有滞后，最近两个季度通常不完整。PPD 无面积字段，所以<b>溢价不是每平尺的同口径比较</b>。</div>
     <div><b>开发区对比</b> 按 postcode sector 聚合，sector 成交量比 borough 小一个数量级，新房登记滞后影响更重（SE10 0 在 2024 年有 133 笔新建，2025 年只剩 8 笔），所以参考月上限设在新房序列截断点。sector 没有公开边界数据，因此这一层只做表格和曲线，不做地图。Category B（批量转让、机构整栋收购做 build-to-rent）已排除，这会系统性低估 BTR 集中片区的新建成交量。</div>
     <div><b>两套片区口径并存</b> 页面里有两个片区区块，方法不同，互为校验：「开发区对比」用<b>滚动12个月中位数</b>（样本&lt;20 不出数，sector 由成交数据反推，见 <code>scripts/build_ppd_agg.py</code> 与 <code>build_sector_agg.py</code>）；「十个新开发区」用<b>年度中位数</b>（样本&lt;10 不出数，sector 人工指定后用街道名反查验证，见 <code>scripts/build_ppd_aggregates.py</code>）。滚动窗口更平滑、出数更早；年度窗口样本更厚、更抗交付批次扰动。两者对不上的地方，通常就是样本太薄。</div>
+    <div><b>治安</b> data.police.uk 街道级犯罪，2025-08 至 2026-07 共 12 个月合计，按 borough 与 MSOA 多边形查询。案发位置被<b>吸附到匿名化的地图点</b>，因此在一个区域上可靠，落到具体街道或某栋楼则无意义。分母为 Census 2021 常住人口。</div>
+    <div><b>收入</b> ASHE 2025（NOMIS）分居民口径与工作地口径：前者是住在该区的人挣多少，后者是该区的岗位付多少，两者差距本身就是信息（Tower Hamlets 居民 £52k，岗位 £66.7k）。片区级无 ASHE，改用 ONS 小区域收入模型 FYE2023 的家庭口径，按人口加权汇总。</div>
+    <div><b>人口构成</b> Census 2021 (TS021) 五大类，按 MSOA 取数后汇总到 borough 与片区。普查在 2020–21 疫情期间进行，伦敦部分区域的学生与临时迁出人口可能失真。</div>
     <div><b>City of London</b> 租赁样本过小，ONS 不发布其租金，地图上按无数据处理。</div>
     <div>重跑数据：<code>python3 scripts/build_dataset.py</code> &rarr; <code>python3 scripts/build_site.py</code>。每月 ONS 发布后换掉 <code>data/raw/</code> 里的两个文件即可。</div>
   </footer>
@@ -359,6 +381,22 @@ const pct = v => (v > 0 ? '+' : '') + v.toFixed(1) + '%';
 const pct2 = v => v.toFixed(2) + '%';
 const cnt = v => Math.round(v).toLocaleString('en-GB');
 const pctInt = v => v.toFixed(0) + '%';
+const num0 = v => Math.round(v).toLocaleString('en-GB');
+const num1 = v => v.toFixed(1);
+const num1p = v => v.toFixed(1) + '%';
+const num0p = v => Math.round(v) + '%';
+const VINTAGE = {
+  crime:  '犯罪 2025-08 – 2026-07 合计 · 每千常住人口 · 不随时间轴变化',
+  pay:    'ASHE 2025 · 全职工作者年薪中位数 · 不随时间轴变化',
+  income: 'ONS 小区域收入模型 FYE2023 · 家庭口径 · 不随时间轴变化',
+  census: 'Census 2021 · 不随时间轴变化'
+};
+function vintageOf(k){
+  if(k.startsWith('crime_')) return VINTAGE.crime;
+  if(k.startsWith('pay_')) return VINTAGE.pay;
+  if(k.startsWith('hh_income')) return VINTAGE.income;
+  return VINTAGE.census;
+}
 
 const METRICS = [
   {k:'price',      g:'房价', n:'平均房价',            type:'seq', fmt:money,  fmtShort:moneyK, unit:''},
@@ -387,7 +425,24 @@ const METRICS = [
   {k:'yield_flat', g:'收益', n:'公寓毛收益率',        type:'seq', fmt:pct2,   fmtShort:pct2,   unit:''},
   {k:'yield_gross',g:'收益', n:'整体毛收益率',        type:'seq', fmt:pct2,   fmtShort:pct2,   unit:''},
   {k:'yield_1bed_flat', g:'收益', n:'一居室租金 / 公寓价', type:'seq', fmt:pct2, fmtShort:pct2, unit:''},
-  {k:'rent_vs_price', g:'收益', n:'租售比 (2015-01=100)', type:'seq', fmt:v=>v.toFixed(1), fmtShort:v=>v.toFixed(0), unit:''}
+  {k:'rent_vs_price', g:'收益', n:'租售比 (2015-01=100)', type:'seq', fmt:v=>v.toFixed(1), fmtShort:v=>v.toFixed(0), unit:''},
+  {k:'crime_total_k',              g:'治安', n:'犯罪率 · 每千人',   type:'seq', fmt:num1, fmtShort:num0, unit:'', static:1},
+  {k:'crime_violent_crime_k',      g:'治安', n:'暴力犯罪 · 每千人', type:'seq', fmt:num1, fmtShort:num0, unit:'', static:1},
+  {k:'crime_burglary_k',           g:'治安', n:'入室盗窃 · 每千人', type:'seq', fmt:num1, fmtShort:num1, unit:'', static:1},
+  {k:'crime_robbery_k',            g:'治安', n:'抢劫 · 每千人',     type:'seq', fmt:num1, fmtShort:num1, unit:'', static:1},
+  {k:'crime_theft_from_the_person_k', g:'治安', n:'扒窃 · 每千人',  type:'seq', fmt:num1, fmtShort:num1, unit:'', static:1},
+  {k:'crime_vehicle_crime_k',      g:'治安', n:'车辆犯罪 · 每千人', type:'seq', fmt:num1, fmtShort:num1, unit:'', static:1},
+  {k:'crime_anti_social_behaviour_k', g:'治安', n:'反社会行为 · 每千人', type:'seq', fmt:num1, fmtShort:num0, unit:'', static:1},
+  {k:'pay_resident',    g:'收入', n:'居民年薪中位数 (ASHE)',    type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'pay_workplace',   g:'收入', n:'工作地年薪中位数 (ASHE)',  type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'hh_income_total', g:'收入', n:'家庭年总收入',             type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'hh_income_ahc',   g:'收入', n:'家庭可支配收入 · 扣住房成本后', type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'pop',        g:'人口构成', n:'常住人口 (Census 2021)', type:'seq', fmt:cnt,  fmtShort:v=>Math.round(v/1000)+'k', unit:'人', static:1},
+  {k:'white_pct',  g:'人口构成', n:'White %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1},
+  {k:'asian_pct',  g:'人口构成', n:'Asian %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1},
+  {k:'black_pct',  g:'人口构成', n:'Black %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1},
+  {k:'mixed_pct',  g:'人口构成', n:'Mixed %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1},
+  {k:'other_pct',  g:'人口构成', n:'Other %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1}
 ];
 
 const MBY = Object.fromEntries(METRICS.map(m => [m.k, m]));
@@ -397,6 +452,8 @@ const DIV = ['--div-n3','--div-n2','--div-n1','--div-0','--div-p1','--div-p2','-
 const DIV_BREAKS = [-10,-5,-1.5,1.5,5,10];
 
 const BOROUGHS = Object.keys(AREAS).filter(c => c.startsWith('E09'));
+const SOCIAL = DATA.social || {}, SOCIAL_SUB = DATA.social_sub || {};
+const STATIC = new Set(METRICS.filter(m => m.static).map(m => m.k));
 
 /* ---------------- state ---------------- */
 const st = {
@@ -405,9 +462,13 @@ const st = {
 };
 
 /* ---------------- helpers ---------------- */
-function val(code, key, i){ const a = AREAS[code]; if(!a || !a[key]) return null;
+function val(code, key, i){
+  if(STATIC.has(key)){ const r = SOCIAL[code]; if(!r) return null;
+    const v = r[key]; return (v === null || v === undefined) ? null : v; }
+  const a = AREAS[code]; if(!a || !a[key]) return null;
   const v = a[key][i]; return (v === null || v === undefined) ? null : v; }
-function lastIdxWith(key){ for(let i = MONTHS.length - 1; i >= 0; i--){
+function lastIdxWith(key){ if(STATIC.has(key)) return MONTHS.length - 1;
+  for(let i = MONTHS.length - 1; i >= 0; i--){
     if(BOROUGHS.some(c => val(c, key, i) !== null)) return i; } return MONTHS.length - 1; }
 // new-build registrations lag, so the last month with *any* data can be a month
 // with one borough in it -- land the slider on the last well-covered month instead
@@ -419,12 +480,18 @@ function lastGoodIdx(key, minAreas){
   }
   return lastIdxWith(key);
 }
-function firstIdxWith(key){ for(let i = 0; i < MONTHS.length; i++){
+function firstIdxWith(key){ if(STATIC.has(key)) return 0;
+  for(let i = 0; i < MONTHS.length; i++){
     if(BOROUGHS.some(c => val(c, key, i) !== null)) return i; } return 0; }
 const cache = {};
 function globalDomain(key){
   if(cache[key]) return cache[key];
   let lo = Infinity, hi = -Infinity;
+  if(STATIC.has(key)){
+    for(const c of BOROUGHS){ const v = val(c, key, 0); if(v === null) continue;
+      if(v < lo) lo = v; if(v > hi) hi = v; }
+    return cache[key] = (lo === Infinity ? [0,1] : [lo,hi]);
+  }
   for(const c of BOROUGHS){ const s = AREAS[c][key]; if(!s) continue;
     for(const v of s){ if(v === null) continue; if(v < lo) lo = v; if(v > hi) hi = v; } }
   return cache[key] = (lo === Infinity ? [0,1] : [lo,hi]);
@@ -435,9 +502,21 @@ function monthDomain(key, i){
     if(v < lo) lo = v; if(v > hi) hi = v; }
   return lo === Infinity ? [0,1] : (lo === hi ? [lo, lo + 1] : [lo,hi]);
 }
+function valuesAt(key, i){
+  const out = [];
+  for(const c of BOROUGHS){ const v = val(c, key, i); if(v !== null) out.push(v); }
+  return out.sort((a,b) => a - b);
+}
 function breaksFor(m, i){
   if(m.breaks) return m.breaks;
   if(m.type === 'div') return DIV_BREAKS;
+  if(st.scale === 'quantile'){
+    const v = valuesAt(m.k, i);
+    if(v.length < 8) return [];
+    const b = [];
+    for(let k = 1; k <= 6; k++) b.push(v[Math.floor(v.length * k / 7)]);
+    return b;
+  }
   const [lo,hi] = st.scale === 'global' ? globalDomain(m.k) : monthDomain(m.k, i);
   const b = []; for(let k = 1; k <= 6; k++) b.push(lo + (hi - lo) * k / 7);
   return b;
@@ -516,7 +595,10 @@ function renderMap(){
     s.label.textContent = (st.labels && v !== null) ? m.fmtShort(v) : '';
   }
   document.getElementById('mapTitle').textContent = m.g + ' · ' + m.n;
-  const ppdNote = m.k.startsWith('pf_') ? '逐笔成交中位数 · 季度 · 单季样本<10 不出数' : '';
+  const ppdNote = m.static ? vintageOf(m.k) + (st.scale === 'quantile' ? ' · 分位数色阶' : '')
+    : m.k.startsWith('pf_') ? '逐笔成交中位数 · 季度 · 单季样本<10 不出数' : '';
+  document.getElementById('slider').disabled = !!m.static;
+  document.getElementById('play').disabled = !!m.static;
   document.getElementById('mapNote').textContent = ppdNote || (
     st.scale === 'global' && m.type === 'seq' ? '色阶固定于 1995–2026 全历史范围' :
     m.type === 'div' ? '发散色阶，灰 = 持平' : '色阶按当月最小/最大拉伸');
@@ -525,6 +607,7 @@ function renderMap(){
 function renderLegend(m, breaks){
   const ramp = m.type === 'div' ? DIV : SEQ;
   const el = document.getElementById('legend');
+  if(!breaks.length){ el.innerHTML = '<span class="lg-nd">数据点不足，无法分箱</span>'; return; }
   const ends = m.type !== 'div'
     ? ['&larr; 数值越低，颜色越浅', '数值越高，颜色越深 &rarr;']
     : m.breaks
@@ -607,6 +690,22 @@ function renderDetail(){
   document.getElementById('dStats').innerHTML = cells.map(c =>
     '<div class="stat"><div class="lab">' + c[0] + '</div><div class="val num">' + c[1]
     + '</div><div class="sub">' + c[2] + '</div></div>').join('');
+
+  const soc = SOCIAL[code];
+  let socEl = document.getElementById('socBlock');
+  if(!socEl){
+    socEl = document.createElement('div'); socEl.id = 'socBlock'; socEl.className = 'socblock';
+    document.getElementById('dStats').after(socEl);
+  }
+  socEl.innerHTML = soc
+    ? '<h3>人口构成 · Census 2021（常住人口 ' + cnt(soc.pop) + '）</h3>' + ethBar(soc)
+      + '<div class="ethkey" style="margin-top:4px">'
+      + '<span>犯罪率 <b class="num">' + (soc.crime_total_k === undefined ? '—' : num1(soc.crime_total_k)) + '</b>/千人</span>'
+      + '<span>居民年薪中位数 <b class="num">' + (soc.pay_resident == null ? '—' : money(soc.pay_resident)) + '</b></span>'
+      + '<span>工作地年薪中位数 <b class="num">' + (soc.pay_workplace == null ? '—' : money(soc.pay_workplace)) + '</b></span>'
+      + '<span>家庭收入(扣房) <b class="num">' + (soc.hh_income_ahc == null ? '—' : money(soc.hh_income_ahc)) + '</b></span>'
+      + '</div>'
+    : '';
 
   const C = document.getElementById('charts');
   C.innerHTML = '';
@@ -892,9 +991,16 @@ sel.addEventListener('change', () => {
   s.min = f; s.max = l;
   if(st.mi < f || st.mi > l) st.mi = lastGoodIdx(m.k);
   s.value = st.mi;
+  if(m.static && st.scale === 'global') setScale('quantile');
+  else if(!m.static && st.scale === 'quantile') setScale('global');
   document.querySelectorAll('#scaleSeg button').forEach(b => b.disabled = (m.type === 'div'));
   renderAll();
 });
+function setScale(v){
+  st.scale = v;
+  document.querySelectorAll('#scaleSeg button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+}
 function segHandler(id, key, cast){
   document.getElementById(id).addEventListener('click', ev => {
     const b = ev.target.closest('button'); if(!b || b.disabled) return;
@@ -1042,6 +1148,51 @@ function renderSub(){
     + '隐含毛收益 = 该 borough 一居室月租 × 12 ÷ 该片区二手公寓中位价，跨源近似，未扣 service charge 与空置。';
 }
 renderSub();
+
+/* ---------------- crime / income / composition ---------------- */
+const ETH = [['white','White','var(--s1)'],['asian','Asian','var(--s2)'],
+             ['black','Black','var(--s3)'],['mixed','Mixed','var(--s4)'],
+             ['other','Other','var(--s5)']];
+function ethBar(rec){
+  if(!rec) return '';
+  const parts = ETH.map(([k,,c]) => [rec[k + '_pct'], c])
+                   .filter(([v]) => v !== null && v !== undefined);
+  if(!parts.length) return '';
+  const det = (rec.eth_detail || []).map(d =>
+    '<span>' + d.g + ' <b class="num">' + d.pct.toFixed(1) + '%</b></span>').join('');
+  return '<div class="ethbar">' + parts.map(([v,c]) =>
+    '<i style="width:' + v + '%;background:' + c + '"></i>').join('') + '</div>'
+    + '<div class="ethkey">' + ETH.map(([k,lab,c]) => rec[k + '_pct'] === undefined ? '' :
+        '<span><i style="background:' + c + '"></i>' + lab + ' ' + num0p(rec[k + '_pct']) + '</span>'
+      ).join('') + '</div>'
+    + (det ? '<div class="ethkey ethdet">' + det + '</div>' : '');
+}
+function renderSoc(){
+  const rows = Object.entries(SOCIAL_SUB);
+  if(!rows.length){ document.getElementById('socSection').hidden = true; return; }
+  const head = ['片区','Borough','常住人口','犯罪率/千人','暴力犯罪','入室盗窃','扒窃',
+                '家庭总收入','扣住房成本后','人口构成 · 上排为五大类，下排为细类前六 (Census 2021)'];
+  const cell = (v, f) => '<td class="n">' + (v === null || v === undefined ? '—' : f(v)) + '</td>';
+  document.getElementById('socTable').innerHTML =
+    '<thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>'
+    + rows.sort((a,b) => (b[1].crime_total_k || 0) - (a[1].crime_total_k || 0))
+        .map(([n,r]) => '<tr><td>' + n + '</td><td>' + r.borough + '</td>'
+          + cell(r.pop, cnt) + cell(r.crime_total_k, num0)
+          + cell(r.crime_violent_crime_k, num1) + cell(r.crime_burglary_k, num1)
+          + cell(r.crime_theft_from_the_person_k, num1)
+          + cell(r.hh_income_total, money) + cell(r.hh_income_ahc, money)
+          + '<td style="min-width:230px">' + ethBar(r) + '</td></tr>').join('')
+    + '</tbody>';
+  document.getElementById('socNote').innerHTML =
+    '片区按 MSOA 聚合（每行的 MSOA 组合见 <code>scripts/submarkets.py</code>），'
+    + '与上面按 postcode sector 聚合的房价片区<b>范围接近但不完全相同</b>。'
+    + '<b>犯罪率的分母是常住人口，这对 Canary Wharf、Stratford、Elephant &amp; Castle 这类'
+    + '日间人口远超居住人口的地方会系统性高估居民实际面临的风险</b>——那里的很多案件'
+    + '受害者并不住在当地。跨片区比较时请把这一点考虑进去。'
+    + '族裔为 Census 2021 五大类口径。薪资（ASHE）只有 borough 级，没有片区级，'
+    + '所以这里用的是 MSOA 家庭收入模型估计。';
+}
+renderSoc();
 
 /* boot */
 document.getElementById('vintage').textContent =

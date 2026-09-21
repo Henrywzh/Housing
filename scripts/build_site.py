@@ -28,6 +28,9 @@ data = json.loads(mapd)
 keys = set()
 for a in data["areas"].values():
     keys |= set(a.keys())
+# point-in-time metrics (crime, census, earnings) live alongside the monthly panel
+for a in (data.get("social") or {}).values():
+    keys |= set(a.keys())
 declared = set(re.findall(r"\{k:'([a-z0-9_]+)'", tpl))
 missing = sorted(declared - keys)
 if missing:
