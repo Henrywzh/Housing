@@ -12,6 +12,10 @@ import warnings
 import numpy as np
 import pandas as pd
 
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from submarkets import MSOA_TO_SUBMARKET as MSOA_TO_SUB
+
 warnings.filterwarnings("ignore")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -181,7 +185,10 @@ if sm_path.exists():
             "old_med": year_series(g, YEARS, "existing", "median"),
             "old_p25": year_series(g, YEARS, "existing", "p25"),
             "old_n":   year_series(g, YEARS, "existing", "n", nmin=1),
+            "old_p10": year_series(g, YEARS, "existing", "p10"),
+            "old_p75": year_series(g, YEARS, "existing", "p75"),
             "new_med": year_series(g, YEARS, "new", "median"),
+            "new_p10": year_series(g, YEARS, "new", "p10"),
             "new_p25": year_series(g, YEARS, "new", "p25"),
             "new_n":   year_series(g, YEARS, "new", "n", nmin=1),
         }
@@ -210,7 +217,7 @@ if sb.exists():
     ETH_BASE = ["white", "asian", "black", "mixed", "other"]
     keep = ([c for c in b.columns if c.endswith("_pct") or c.endswith("_k")]
             + ["pop", "hh_income_total", "hh_income_net", "hh_income_ahc",
-               "pay_resident", "pay_workplace"])
+               "pay_resident", "pay_workplace", "households"])
     for _, r in b.dropna(subset=["code"]).iterrows():
         rec = {k: (None if pd.isna(r[k]) else round(float(r[k]), 2))
                for k in keep if k in b.columns}
@@ -253,12 +260,46 @@ if sb.exists():
             social_sub[r["submarket"]] = rec
     print(f"social layer     : {len(social)} boroughs, {len(social_sub)} submarkets")
 
+# ---------------------------------------- LSOA crime inside the submarkets
+# An LSOA that records ZERO crimes over twelve months in inner London is not
+# safe, it is unmapped: data.police.uk snaps every crime to a pre-existing
+# anonymised point tied to a named feature, and a newly built block often has
+# no such point inside it, so its crimes land on the nearest named thing
+# outside. Verified: each zero-crime LSOA here has 1,000+ crimes within a mile.
+# They are published as unknown, never as zero.
+lsoa = {}
+lc = OUT / "crime_lsoa.csv"
+if lc.exists() and (RAW / "lsoa_submarket.json").exists():
+    lk = pd.DataFrame(json.loads((RAW / "lsoa_submarket.json").read_text()))
+    lpop = pd.read_csv(RAW / "social" / "pop_lsoa.csv")
+    lpop.columns = ["lsoa", "pop"]
+    lc_df = pd.read_csv(lc).merge(lk, on="lsoa").merge(lpop, on="lsoa", how="left")
+    lc_df["submarket"] = lc_df["msoa"].map(MSOA_TO_SUB)
+    unmapped = int((lc_df["crime_total"] == 0).sum())
+    for _, r in lc_df.iterrows():
+        rec = {"name": r["lsoa_nm"], "msoa": r["msoa"], "sub": r["submarket"],
+               "pop": None if pd.isna(r["pop"]) else int(r["pop"])}
+        zero = r["crime_total"] == 0
+        for c in [c for c in lc_df.columns if c.startswith("crime_")]:
+            rec[c + "_k"] = None if (zero or pd.isna(r["pop"]) or not r["pop"]) \
+                else round(r[c] / r["pop"] * 1000, 1)
+        rec["unmapped"] = bool(zero)
+        lsoa[r["lsoa"]] = rec
+    print(f"LSOA layer       : {len(lsoa)} LSOAs, {unmapped} with no snap point (published as unknown)")
+
+lsoa_geo = {}
+lg = RAW / "lsoa_sub_bgc.geojson"
+if lg.exists():
+    lsoa_geo = json.loads(lg.read_text())
+
 geo = json.loads(GEO_FILE.read_text())
 payload = {
     "months": months,
     "areas": areas,
     "submarkets": submarkets,
     "social": social,
+    "lsoa": lsoa,
+    "lsoa_geo": lsoa_geo,
     "social_sub": social_sub,
     "london_flat": london_flat,
     "meta": {
@@ -270,6 +311,7 @@ payload = {
 }
 (OUT / "map_data.json").write_text(json.dumps(payload, separators=(",", ":")))
 (OUT / "london_boroughs.geojson").write_text(json.dumps(geo, separators=(",", ":")))
+(OUT / "lsoa_submarket.geojson").write_text(json.dumps(lsoa_geo, separators=(",", ":")))
 
 print(f"months           : {months[0]} .. {months[-1]}  ({len(months)})")
 print(f"areas            : {len(areas)}")

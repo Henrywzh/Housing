@@ -68,6 +68,17 @@ Replace the two files in `data/raw/` after the ONS release, then rerun
   daytime or visitor populations (City of London has 8,584 residents) score
   far higher than a resident's actual exposure. Burglary and vehicle crime are
   the categories whose victims really are residents.
+* An LSOA recording zero crimes over twelve months is **unmapped, not safe**.
+  data.police.uk snaps each crime to a pre-existing anonymised point tied to a
+  named feature; a newly built block often has none inside it, so its crimes
+  land on the nearest named thing outside. Verified: every zero-crime LSOA here
+  has 1,000+ crimes within a mile. New-build crime reads low for this reason,
+  and the older LSOA next door reads high. Published as unknown, never zero.
+* There is **no official rent data below borough level**. PIPR measures the whole
+  rented stock, including tenancies signed years ago, so it sits well below what
+  a new tower asks today. A submarket yield built from borough rent over
+  submarket price is not a real number; the page has a calculator for the rents
+  you actually observe instead.
 * Census 2021 is the newest sub-borough ethnicity data that exists; the next
   census is 2031. It also predates most of the new-build delivery in these
   submarkets, so the composition is stale exactly where it matters most.

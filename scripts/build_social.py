@@ -66,6 +66,17 @@ inc = inc.merge(inc_sheet("Net annual income", "hh_income_net"), on="msoa")
 inc = inc.merge(inc_sheet("Net income after housing costs", "hh_income_ahc"), on="msoa")
 w = w.merge(inc, on="msoa", how="left")
 
+# ------------------------------------------------------------------- tenure
+# Private-rented share is the best open proxy for how deep a letting market is:
+# no official source publishes time-to-let or sub-borough asking rents.
+ten = pd.read_csv(SOC / "tenure_msoa.csv")
+ten.columns = ["msoa", "ten", "n"]
+ten["ten"] = ten["ten"].str.split(":").str[0].str.strip()
+tw = ten.pivot_table(index="msoa", columns="ten", values="n", aggfunc="sum").rename(
+    columns={"Total": "households", "Private rented": "prs", "Social rented": "social",
+             "Owned": "owned", "Shared ownership": "shared"})
+w = w.merge(tw.reset_index(), on="msoa", how="left")
+
 # -------------------------------------------------------------------- crime
 # Crime is fetched per polygon, and we only fetch the 25 submarket MSOAs -- so
 # MSOA crime rolls up to submarkets ONLY. Borough crime comes from its own
@@ -84,7 +95,8 @@ CRIMECOLS = [c for c in w.columns if c.startswith("crime_")]
 def roll(df, keys):
     g = df.groupby(keys)
     cc = [c for c in CRIMECOLS if c in df.columns]
-    out = g[["pop"] + ETHCOLS + cc].sum()
+    TEN = [c for c in ("households", "prs", "social", "owned", "shared") if c in df.columns]
+    out = g[["pop"] + ETHCOLS + TEN + cc].sum()
     # income is a household-level model estimate, so weight it by population
     for c in ("hh_income_total", "hh_income_net", "hh_income_ahc"):
         out[c] = g.apply(lambda d: (d[c] * d["pop"]).sum() / d["pop"].sum()
@@ -126,6 +138,9 @@ for df in (boroughs, subs):
     for c in CRIMECOLS:
         if c in df.columns:
             df[c + "_k"] = df[c] / df["pop"] * 1000
+    for c in ("prs", "social", "owned", "shared"):
+        if c in df.columns:
+            df[c + "_pct"] = df[c] / df["households"] * 100
 
 # ----------------------------------------------------------------- earnings
 def detail_mix(msoas, top=6):

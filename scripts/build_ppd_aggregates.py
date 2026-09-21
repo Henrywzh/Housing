@@ -55,8 +55,13 @@ df["sector"] = pc.str.replace(r"^(\S+)\s+(\d).*$", r"\1 \2", regex=True).where(p
 df["market"] = df["sector"].map(SECTOR_TO_MKT)
 
 def agg(g):
+    # A one-bed is not the median flat. In a sector of mixed tower stock the
+    # median sits around a two-bed, so the lower deciles are the number a
+    # one-bed buyer should be reading.
     return pd.Series({"n": len(g), "median": g["price"].median(),
-                      "p25": g["price"].quantile(.25), "p75": g["price"].quantile(.75)})
+                      "p10": g["price"].quantile(.10),
+                      "p25": g["price"].quantile(.25),
+                      "p75": g["price"].quantile(.75)})
 
 # ---- borough x quarter x seg x build -------------------------------------
 bq = df.groupby(["district", "q", "seg", "build"]).apply(agg, include_groups=False).reset_index()

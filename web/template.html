@@ -176,6 +176,12 @@ input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
 .chart .hov.on{visibility:visible}
 .chartwrap{position:relative}
 
+.lsoamul{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px;padding:6px 16px 4px}
+.lmp{border:1px solid var(--line);border-radius:10px;padding:8px 9px 6px;background:var(--surface-2)}
+.lmp h3{margin:0 0 4px;font-size:12.5px;font-weight:600}
+.lmp svg{width:100%;height:auto;display:block;background:var(--map-plate);border-radius:7px}
+.lmp path{stroke:#fff;stroke-width:.7;cursor:pointer}
+.lmp .cap{font:400 10.5px/1.4 "IBM Plex Mono",monospace;color:var(--ink-3);margin-top:4px}
 .submul{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:10px;padding:6px 16px 4px}
 .smp{border:1px solid var(--line);border-radius:10px;padding:8px 9px 5px;background:var(--surface-2)}
 .smp h3{margin:0 0 1px;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
@@ -220,7 +226,21 @@ table.sm-t tbody tr.sel td:first-child{font-weight:600}
 .ethdet b{color:var(--ink-2);font-weight:500}
 .socblock{padding:12px 16px 4px;display:grid;gap:3px}
 .socblock h3{margin:0;font-size:12.5px;font-weight:500;color:var(--ink-2)}
-.soctbl{min-width:900px}
+.soctbl{min-width:1040px}
+.calc{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;padding:12px 16px 4px}
+.calc label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-3)}
+.calc input[type=number]{font:500 15px/1 "IBM Plex Mono",monospace;width:132px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink)}
+.calc input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.calc .res{font:500 26px/1.1 "IBM Plex Mono",monospace;letter-spacing:-.02em}
+.calc .res small{display:block;font:400 11px/1.4 "IBM Plex Sans",sans-serif;color:var(--ink-3);
+  text-transform:none;letter-spacing:0;margin-top:3px}
+.dist{display:flex;align-items:center;gap:6px;min-width:190px}
+.dist .track{position:relative;height:16px;flex:1;background:var(--surface-3);border-radius:3px}
+.dist .box{position:absolute;top:0;bottom:0;background:var(--s1);opacity:.45;border-radius:3px}
+.dist .med{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.dist .lo,.dist .hi{font:500 10px/1 "IBM Plex Mono",monospace;color:var(--ink-3);white-space:nowrap}
 footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);
         font-size:12px;color:var(--ink-3);display:grid;gap:7px}
 footer b{color:var(--ink-2);font-weight:500}
@@ -341,6 +361,30 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
       <span class="code">Census 2021 · ONS 小区域收入 FYE2023 · data.police.uk 近12个月</span></div>
     <p class="subnote" id="socNote"></p>
     <div class="tablewrap"><table class="soctbl" id="socTable"></table></div>
+  </section>
+
+  <section class="card detail" id="lsoaSection">
+    <div class="dhead"><h2>片区内部 · LSOA 级治安</h2>
+      <span class="code">约 1,500 人一格 · data.police.uk 近12个月</span></div>
+    <p class="subnote" id="lsoaNote"></p>
+    <div class="legend" id="lsoaLegend"></div>
+    <div class="lsoamul" id="lsoaGrid"></div>
+  </section>
+
+  <section class="card detail" id="yieldSection">
+    <div class="dhead"><h2>毛收益试算</h2>
+      <span class="code">用你自己看到的挂牌数字</span></div>
+    <p class="subnote">官方<b>没有任何低于 borough 层级的租金数据</b>。PIPR 统计的是全部在租存量（含多年前签约的老合同和老公房），
+      不是当月新挂牌价，所以它系统性低于你在 Rightmove 看到的新盘要价。片区级的收益率，
+      只能用你实际观察到的租金来算——下面按你输入的数字算，并对照该片区的真实成交价分布。</p>
+    <div class="calc">
+      <label>月租 £<input type="number" id="calcRent" value="3000" min="0" step="50"></label>
+      <label>买入价 £<input type="number" id="calcPrice" value="600000" min="1" step="5000"></label>
+      <label>年费用 £ (service charge 等)<input type="number" id="calcCost" value="4500" min="0" step="250"></label>
+      <label>空置率 %<input type="number" id="calcVoid" value="4" min="0" max="50" step="1"></label>
+      <div><div class="res" id="calcOut">—</div></div>
+    </div>
+    <div class="tablewrap"><table class="soctbl" id="distTable"></table></div>
   </section>
 
   <footer>
@@ -1195,6 +1239,128 @@ function renderSoc(){
     + '所以这里用的是 MSOA 家庭收入模型估计。';
 }
 renderSoc();
+
+/* ---------------- yield calculator + real price distribution ---------------- */
+function calcYield(){
+  const r = +document.getElementById('calcRent').value || 0;
+  const p = +document.getElementById('calcPrice').value || 0;
+  const c = +document.getElementById('calcCost').value || 0;
+  const v = Math.min(Math.max(+document.getElementById('calcVoid').value || 0, 0), 50);
+  const el = document.getElementById('calcOut');
+  if(!r || !p){ el.textContent = '—'; return; }
+  const gross = r * 12 / p * 100;
+  const net = (r * 12 * (1 - v / 100) - c) / p * 100;
+  el.innerHTML = gross.toFixed(2) + '% <small>毛收益 · 扣费用与空置后 <b>'
+    + net.toFixed(2) + '%</b>（未计税、贷款、印花税与中介费）</small>';
+}
+['calcRent','calcPrice','calcCost','calcVoid'].forEach(id =>
+  document.getElementById(id).addEventListener('input', calcYield));
+calcYield();
+
+function renderDist(){
+  const years = LF.years;
+  const rows = Object.entries(SM).map(([n,m]) => {
+    const i = latestWith(m.old_med, years, m.old_n, 20);
+    return {n, m, i};
+  }).filter(r => r.i >= 0);
+  let lo = Infinity, hi = -Infinity;
+  rows.forEach(r => { const a = r.m.old_p10[r.i], b = r.m.old_p75[r.i];
+    if(a !== null && a < lo) lo = a; if(b !== null && b > hi) hi = b; });
+  const bar = r => {
+    const a = r.m.old_p10[r.i], q = r.m.old_p25[r.i], me = r.m.old_med[r.i], b = r.m.old_p75[r.i];
+    if(a === null || b === null) return '';
+    const X = v => (v - lo) / (hi - lo) * 100;
+    return '<div class="dist"><span class="lo">' + moneyK(a) + '</span>'
+      + '<span class="track"><i class="box" style="left:' + X(a) + '%;width:' + (X(b) - X(a)) + '%"></i>'
+      + '<i class="med" style="left:' + X(me) + '%"></i></span>'
+      + '<span class="hi">' + moneyK(b) + '</span></div>';
+  };
+  const head = ['片区','年份','二手 p10','p25','中位','p75','年成交','私人租赁%','社会住房%',
+                '二手换手率%','分布 (p10–p75，竖线为中位)'];
+  document.getElementById('distTable').innerHTML =
+    '<thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>'
+    + rows.sort((a,b) => (a.m.old_p10[a.i] || 0) - (b.m.old_p10[b.i] || 0)).map(r => {
+        const soc = SOCIAL_SUB[r.n] || {};
+        const hh = soc.households, nsold = r.m.old_n[r.i];
+        const turn = (hh && nsold) ? nsold / hh * 100 : null;
+        const c = (v, f) => '<td class="n">' + (v === null || v === undefined ? '—' : f(v)) + '</td>';
+        return '<tr><td>' + r.n + '</td><td class="n">' + years[r.i] + '</td>'
+          + c(r.m.old_p10[r.i], money) + c(r.m.old_p25[r.i], money)
+          + c(r.m.old_med[r.i], money) + c(r.m.old_p75[r.i], money)
+          + c(nsold, cnt) + c(soc.prs_pct, num1p) + c(soc.social_pct, num1p)
+          + c(turn, num1p) + '<td>' + bar(r) + '</td></tr>';
+      }).join('') + '</tbody>';
+}
+renderDist();
+
+/* ---------------- LSOA-level crime inside each submarket ---------------- */
+function renderLsoa(){
+  const L = DATA.lsoa || {}, G = DATA.lsoa_geo || {};
+  const feats = G.features || [];
+  if(!feats.length){ document.getElementById('lsoaSection').hidden = true; return; }
+  const key = 'crime_total_k';
+  const vals = Object.values(L).map(r => r[key]).filter(v => v !== null).sort((a,b) => a - b);
+  const brk = []; for(let k = 1; k <= 6; k++) brk.push(vals[Math.floor(vals.length * k / 7)]);
+  const colour = v => v === null ? 'url(#nodata-hatch)' : 'var(' + SEQ[binOf(v, brk)] + ')';
+
+  const bySub = {};
+  feats.forEach(f => { const c = f.properties.LSOA21CD, r = L[c];
+    if(!r || !r.sub) return; (bySub[r.sub] = bySub[r.sub] || []).push([f, r]); });
+
+  const html = Object.entries(bySub).map(([name, items]) => {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    items.forEach(([f]) => eachRing(f, r => r.forEach(p => {
+      const [x, y] = proj(p[0], p[1]);
+      if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; })));
+    const W2 = 190, H2 = 150, P = 6;
+    const sc2 = Math.min((W2 - P*2) / (x1 - x0 || 1), (H2 - P*2) / (y1 - y0 || 1));
+    const ox2 = (W2 - (x1 - x0) * sc2) / 2, oy2 = (H2 - (y1 - y0) * sc2) / 2;
+    const P2 = (lon, lat) => { const [x, y] = proj(lon, lat);
+      return [(x - x0) * sc2 + ox2, (y - y0) * sc2 + oy2]; };
+    let g = '';
+    items.forEach(([f, r]) => {
+      let d = '';
+      eachRing(f, ring => { ring.forEach((p, i) => { const [x, y] = P2(p[0], p[1]);
+        d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); }); d += 'Z'; });
+      const t = r.unmapped ? r.name + ' · 无吸附点，非零犯罪'
+        : r.name + ' · ' + (r[key] === null ? '—' : num0(r[key]) + '/千人');
+      g += '<path d="' + d + '" fill="' + colour(r[key]) + '"><title>' + t + '</title></path>';
+    });
+    const ok = items.map(([, r]) => r[key]).filter(v => v !== null);
+    const spread = ok.length > 1
+      ? '区内 ' + num0(Math.min(...ok)) + '–' + num0(Math.max(...ok)) + '/千人（'
+        + (Math.max(...ok) / Math.min(...ok)).toFixed(1) + '倍差距）'
+      : '样本不足';
+    const un = items.filter(([, r]) => r.unmapped).length;
+    return '<div class="lmp"><h3>' + name + '</h3>'
+      + '<svg viewBox="0 0 ' + W2 + ' ' + H2 + '">'
+      + '<defs><pattern id="nd2" width="5" height="5" patternUnits="userSpaceOnUse" '
+      + 'patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--nodata)"/>'
+      + '<line x1="0" y1="0" x2="0" y2="5" stroke="var(--nodata-ink)" stroke-width="1.4"/>'
+      + '</pattern></defs>' + g.replace(/url\(#nodata-hatch\)/g, 'url(#nd2)') + '</svg>'
+      + '<div class="cap">' + items.length + ' 个 LSOA · ' + spread
+      + (un ? ' · ' + un + ' 个无吸附点' : '') + '</div></div>';
+  }).join('');
+  document.getElementById('lsoaGrid').innerHTML = html;
+
+  const el = document.getElementById('lsoaLegend');
+  let h = '<div class="lg-swatches">';
+  SEQ.forEach((c, k) => h += '<div class="lg-item"><i style="background:var(' + c + ')"></i>'
+    + '<b>' + (k < brk.length ? num0(brk[k]) : '') + '</b></div>');
+  h += '</div><span class="lg-nd"><i></i>无吸附点</span>'
+     + '<div class="lg-ends"><span>&larr; 案件少，颜色越浅</span><span>案件多，颜色越深 &rarr;</span></div>';
+  el.innerHTML = h;
+
+  document.getElementById('lsoaNote').innerHTML =
+    'MSOA 约 7,500 人，会把"河边"和"铁道后面"算成同一个地方；LSOA 约 1,500 人，差异才显出来。'
+    + '色阶为全部 126 个 LSOA 的分位数，悬停看具体数值。'
+    + '<b>斜纹格＝该 LSOA 十二个月录得 0 起案件，这不是治安好，是没有匿名化吸附点。</b>'
+    + 'data.police.uk 把每起案件吸附到既有的、与命名地物绑定的匿名点上，全新楼盘地块内往往没有这种点，'
+    + '案件就被推到最近的已命名地物（"On or near Supermarket"、"On or near Canary Wharf"）上，通常在楼盘外。'
+    + '已核实：这几个 LSOA 方圆一英里内单月都有 1,000 起以上案件。'
+    + '这意味着<b>越新的楼盘，犯罪数据越可能偏低</b>，而相邻的老 LSOA 会相应偏高。';
+}
+renderLsoa();
 
 /* boot */
 document.getElementById('vintage').textContent =
