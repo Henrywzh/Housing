@@ -209,7 +209,8 @@ if sb.exists():
         print("WARN unmatched social boroughs:", miss)
     ETH_BASE = ["white", "asian", "black", "mixed", "other"]
     keep = ([c for c in b.columns if c.endswith("_pct") or c.endswith("_k")]
-            + ["pop", "hh_income_total", "hh_income_ahc", "pay_resident", "pay_workplace"])
+            + ["pop", "hh_income_total", "hh_income_net", "hh_income_ahc",
+               "pay_resident", "pay_workplace"])
     for _, r in b.dropna(subset=["code"]).iterrows():
         rec = {k: (None if pd.isna(r[k]) else round(float(r[k]), 2))
                for k in keep if k in b.columns}
@@ -225,7 +226,8 @@ if sb.exists():
         if c in tot: ldn[c + "_pct"] = round(tot[c].sum() / pop * 100, 2)
     for c in [c for c in tot.columns if c.startswith("crime_") and not c.endswith("_k")]:
         ldn[c + "_k"] = round(tot[c].sum() / pop * 1000, 2)
-    for c in ("hh_income_total", "hh_income_ahc", "pay_resident", "pay_workplace"):
+    for c in ("hh_income_total", "hh_income_net", "hh_income_ahc",
+              "pay_resident", "pay_workplace"):
         if c in tot:
             wgt = (tot[c] * tot["pop"]).sum() / tot.loc[tot[c].notna(), "pop"].sum()
             ldn[c] = round(float(wgt), 2)

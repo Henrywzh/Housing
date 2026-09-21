@@ -351,7 +351,7 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div><b>开发区对比</b> 按 postcode sector 聚合，sector 成交量比 borough 小一个数量级，新房登记滞后影响更重（SE10 0 在 2024 年有 133 笔新建，2025 年只剩 8 笔），所以参考月上限设在新房序列截断点。sector 没有公开边界数据，因此这一层只做表格和曲线，不做地图。Category B（批量转让、机构整栋收购做 build-to-rent）已排除，这会系统性低估 BTR 集中片区的新建成交量。</div>
     <div><b>两套片区口径并存</b> 页面里有两个片区区块，方法不同，互为校验：「开发区对比」用<b>滚动12个月中位数</b>（样本&lt;20 不出数，sector 由成交数据反推，见 <code>scripts/build_ppd_agg.py</code> 与 <code>build_sector_agg.py</code>）；「十个新开发区」用<b>年度中位数</b>（样本&lt;10 不出数，sector 人工指定后用街道名反查验证，见 <code>scripts/build_ppd_aggregates.py</code>）。滚动窗口更平滑、出数更早；年度窗口样本更厚、更抗交付批次扰动。两者对不上的地方，通常就是样本太薄。</div>
     <div><b>治安</b> data.police.uk 街道级犯罪，2025-08 至 2026-07 共 12 个月合计，按 borough 与 MSOA 多边形查询。案发位置被<b>吸附到匿名化的地图点</b>，因此在一个区域上可靠，落到具体街道或某栋楼则无意义。分母为 Census 2021 常住人口。</div>
-    <div><b>收入</b> ASHE 2025（NOMIS）分居民口径与工作地口径：前者是住在该区的人挣多少，后者是该区的岗位付多少，两者差距本身就是信息（Tower Hamlets 居民 £52k，岗位 £66.7k）。片区级无 ASHE，改用 ONS 小区域收入模型 FYE2023 的家庭口径，按人口加权汇总。</div>
+    <div><b>收入</b> 家庭收入为 ONS 小区域模型的<b>平均值</b>（非中位数），三个口径依次是：<b>税前</b>（全体家庭成员总收入，含福利）、<b>税后</b>（扣所得税、国民保险、council tax）、<b>税后扣房·等值化</b>（再扣房租/水费等，并按 OECD 家庭规模等值化，因此不等于某个家庭的实际到手现金）。ASHE 2025（NOMIS）分居民口径与工作地口径：前者是住在该区的人挣多少，后者是该区的岗位付多少，两者差距本身就是信息（Tower Hamlets 居民 £52k，岗位 £66.7k）。片区级无 ASHE，改用 ONS 小区域收入模型 FYE2023 的家庭口径，按人口加权汇总。</div>
     <div><b>人口构成</b> Census 2021 (TS021) 五大类，按 MSOA 取数后汇总到 borough 与片区。普查在 2020–21 疫情期间进行，伦敦部分区域的学生与临时迁出人口可能失真。</div>
     <div><b>City of London</b> 租赁样本过小，ONS 不发布其租金，地图上按无数据处理。</div>
     <div>重跑数据：<code>python3 scripts/build_dataset.py</code> &rarr; <code>python3 scripts/build_site.py</code>。每月 ONS 发布后换掉 <code>data/raw/</code> 里的两个文件即可。</div>
@@ -435,8 +435,9 @@ const METRICS = [
   {k:'crime_anti_social_behaviour_k', g:'治安', n:'反社会行为 · 每千人', type:'seq', fmt:num1, fmtShort:num0, unit:'', static:1},
   {k:'pay_resident',    g:'收入', n:'居民年薪中位数 (ASHE)',    type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
   {k:'pay_workplace',   g:'收入', n:'工作地年薪中位数 (ASHE)',  type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
-  {k:'hh_income_total', g:'收入', n:'家庭年总收入',             type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
-  {k:'hh_income_ahc',   g:'收入', n:'家庭可支配收入 · 扣住房成本后', type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'hh_income_total', g:'收入', n:'家庭年总收入 · 税前',       type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'hh_income_net',   g:'收入', n:'家庭年收入 · 税后',         type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
+  {k:'hh_income_ahc',   g:'收入', n:'家庭收入 · 税后扣房·等值化', type:'seq', fmt:money, fmtShort:moneyK, unit:'', static:1},
   {k:'pop',        g:'人口构成', n:'常住人口 (Census 2021)', type:'seq', fmt:cnt,  fmtShort:v=>Math.round(v/1000)+'k', unit:'人', static:1},
   {k:'white_pct',  g:'人口构成', n:'White %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1},
   {k:'asian_pct',  g:'人口构成', n:'Asian %',  type:'seq', fmt:num1p, fmtShort:num0p, unit:'', static:1},
@@ -703,7 +704,7 @@ function renderDetail(){
       + '<span>犯罪率 <b class="num">' + (soc.crime_total_k === undefined ? '—' : num1(soc.crime_total_k)) + '</b>/千人</span>'
       + '<span>居民年薪中位数 <b class="num">' + (soc.pay_resident == null ? '—' : money(soc.pay_resident)) + '</b></span>'
       + '<span>工作地年薪中位数 <b class="num">' + (soc.pay_workplace == null ? '—' : money(soc.pay_workplace)) + '</b></span>'
-      + '<span>家庭收入(扣房) <b class="num">' + (soc.hh_income_ahc == null ? '—' : money(soc.hh_income_ahc)) + '</b></span>'
+      + '<span>家庭收入 税后 <b class="num">' + (soc.hh_income_net == null ? '—' : money(soc.hh_income_net)) + '</b></span>'
       + '</div>'
     : '';
 
@@ -1171,7 +1172,7 @@ function renderSoc(){
   const rows = Object.entries(SOCIAL_SUB);
   if(!rows.length){ document.getElementById('socSection').hidden = true; return; }
   const head = ['片区','Borough','常住人口','犯罪率/千人','暴力犯罪','入室盗窃','扒窃',
-                '家庭总收入','扣住房成本后','人口构成 · 上排为五大类，下排为细类前六 (Census 2021)'];
+                '家庭收入 税前','税后','税后扣房·等值化','人口构成 · 上排为五大类，下排为细类前六 (Census 2021)'];
   const cell = (v, f) => '<td class="n">' + (v === null || v === undefined ? '—' : f(v)) + '</td>';
   document.getElementById('socTable').innerHTML =
     '<thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>'
@@ -1180,7 +1181,8 @@ function renderSoc(){
           + cell(r.pop, cnt) + cell(r.crime_total_k, num0)
           + cell(r.crime_violent_crime_k, num1) + cell(r.crime_burglary_k, num1)
           + cell(r.crime_theft_from_the_person_k, num1)
-          + cell(r.hh_income_total, money) + cell(r.hh_income_ahc, money)
+          + cell(r.hh_income_total, money) + cell(r.hh_income_net, money)
+          + cell(r.hh_income_ahc, money)
           + '<td style="min-width:230px">' + ethBar(r) + '</td></tr>').join('')
     + '</tbody>';
   document.getElementById('socNote').innerHTML =

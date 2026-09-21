@@ -57,7 +57,12 @@ def inc_sheet(sheet, col):
     d.columns = ["msoa", col]
     return d
 
+# Four different things, and the difference between them matters:
+#   total = GROSS, all household members, including benefits -- before any tax
+#   net   = after income tax, NI and council tax; still before housing
+#   ahc   = net, minus rent/water etc, THEN OECD-equivalised for household size
 inc = inc_sheet("Total annual income", "hh_income_total")
+inc = inc.merge(inc_sheet("Net annual income", "hh_income_net"), on="msoa")
 inc = inc.merge(inc_sheet("Net income after housing costs", "hh_income_ahc"), on="msoa")
 w = w.merge(inc, on="msoa", how="left")
 
@@ -81,7 +86,7 @@ def roll(df, keys):
     cc = [c for c in CRIMECOLS if c in df.columns]
     out = g[["pop"] + ETHCOLS + cc].sum()
     # income is a household-level model estimate, so weight it by population
-    for c in ("hh_income_total", "hh_income_ahc"):
+    for c in ("hh_income_total", "hh_income_net", "hh_income_ahc"):
         out[c] = g.apply(lambda d: (d[c] * d["pop"]).sum() / d["pop"].sum()
                          if d[c].notna().any() else float("nan"))
     out["n_msoa"] = g.size()
