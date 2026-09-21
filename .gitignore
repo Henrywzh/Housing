@@ -8,3 +8,7 @@ london_housing_map.html
 .DS_Store
 __pycache__/
 *.pyc
+
+# EPC API credential - never commit
+data/raw/epc/.token
+.env
