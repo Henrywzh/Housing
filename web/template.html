@@ -378,6 +378,19 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div class="tablewrap"><table class="soctbl" id="psfTable"></table></div>
   </section>
 
+  <section class="card detail" id="devSection">
+    <div class="dhead"><h2>按楼盘 · 买新房的价，卖二手的价</h2>
+      <span class="code">Price Paid × EPC · 街道定义楼盘</span></div>
+    <p class="subnote" id="devNote"></p>
+    <div class="tablewrap"><table class="soctbl" id="devTable"></table></div>
+    <div class="chart-t" style="padding:4px 16px 0">
+      <span>同一楼盘的每平尺价格</span>
+      <span class="lgd"><span><i style="background:var(--s2)"></i>新建首次销售</span>
+        <span><i style="background:var(--s1)"></i>二手转售</span></span>
+    </div>
+    <div class="submul" id="devGrid"></div>
+  </section>
+
   <section class="card detail" id="yieldSection">
     <div class="dhead"><h2>毛收益试算</h2>
       <span class="code">用你自己看到的挂牌数字</span></div>
@@ -1332,6 +1345,68 @@ function renderPsf(){
     + '所以二手样本偏向近年流通过的房子，这个偏差无法消除，读数时请记住。';
 }
 renderPsf();
+
+/* ---------------- development level ---------------- */
+function renderDevs(){
+  const D = DATA.devs || {}, yrs = D._years || [];
+  const names = Object.keys(D).filter(k => !k.startsWith('_'));
+  if(!names.length){ document.getElementById('devSection').hidden = true; return; }
+  const head = ['楼盘','新建 £/sqft','二手 £/sqft','转售相对新建','新建面积㎡','二手面积㎡','新 n','二手 n'];
+  const c = (v, f) => '<td class="n">' + (v === null || v === undefined ? '—' : f(v)) + '</td>';
+  const rows = names.map(n => [n, D[n]])
+    .filter(([, r]) => r.psf_Y !== undefined || r.psf_N !== undefined);
+  document.getElementById('devTable').innerHTML =
+    '<thead><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>'
+    + rows.sort((a,b) => (a[1].resale_vs_new_pct ?? 99) - (b[1].resale_vs_new_pct ?? 99))
+      .map(([n,r]) => '<tr><td>' + n + '</td>'
+        + c(r.psf_Y, v => '£' + num0(v)) + c(r.psf_N, v => '£' + num0(v))
+        + '<td class="n">' + (r.resale_vs_new_pct === null || r.resale_vs_new_pct === undefined
+            ? '—' : '<span class="' + (r.resale_vs_new_pct >= 0 ? 'up' : 'dn') + '">'
+              + pct(r.resale_vs_new_pct) + '</span>') + '</td>'
+        + c(r.sqm_Y, num0) + c(r.sqm_N, num0) + c(r.n_Y, cnt) + c(r.n_N, cnt)
+        + '</tr>').join('') + '</tbody>';
+
+  // one small chart per development: new-build sales against resales
+  let lo = 1e9, hi = -1e9;
+  names.forEach(n => ['new','resale'].forEach(k => (D[n][k] || []).forEach(v => {
+    if(v === null) return; if(v < lo) lo = v; if(v > hi) hi = v; })));
+  lo = Math.floor(lo / 100) * 100; hi = Math.ceil(hi / 100) * 100;
+  const PW = 200, PH = 96, M = {t:8, r:6, b:14, l:30};
+  const px = i => M.l + i / (yrs.length - 1) * (PW - M.l - M.r);
+  const py = v => M.t + (1 - (v - lo) / (hi - lo)) * (PH - M.t - M.b);
+  const line = (a, col) => { let d = '', open = false;
+    (a || []).forEach((v,i) => { if(v === null){ open = false; return; }
+      d += (open ? 'L' : 'M') + px(i).toFixed(1) + ' ' + py(v).toFixed(1); open = true; });
+    return d ? '<path d="' + d + '" fill="none" stroke="' + col
+      + '" stroke-width="2" stroke-linejoin="round"/>' : ''; };
+  document.getElementById('devGrid').innerHTML = names.map(n => {
+    const r = D[n];
+    if(!(r.new || []).some(v => v !== null) && !(r.resale || []).some(v => v !== null)) return '';
+    let g = '';
+    [lo, hi].forEach(t => g += '<text class="idx" x="' + (M.l - 4) + '" y="' + (py(t) + 3).toFixed(1)
+      + '" text-anchor="end" fill="var(--ink-3)">' + num0(t) + '</text>');
+    [2018, 2022, 2025].forEach(y => { const i = yrs.indexOf(y); if(i < 0) return;
+      g += '<text class="idx" x="' + px(i).toFixed(1) + '" y="' + (PH - 3)
+         + '" text-anchor="middle" fill="var(--ink-3)">' + y + '</text>'; });
+    g += line(r.resale, 'var(--s1)') + line(r.new, 'var(--s2)');
+    return '<div class="smp"><h3>' + n + '</h3>'
+      + '<div class="meta">' + r.streets.slice(0,3).join(' · ')
+      + (r.streets.length > 3 ? ' +' + (r.streets.length - 3) : '') + '</div>'
+      + '<svg viewBox="0 0 ' + PW + ' ' + PH + '">' + g + '</svg></div>';
+  }).join('');
+
+  document.getElementById('devNote').innerHTML =
+    '片区数据回答"这一带贵不贵"；这一节回答你的方案真正取决于的问题：'
+    + '<b>你按新房价买入，五到十年后卖进的是同一个楼盘的二手市场。</b>'
+    + '两者每平尺的差额就是折价，而各楼盘差别极大——'
+    + 'Embassy Gardens 新建 £1,483、二手 £1,101（<b>−26%</b>），'
+    + 'Battersea Power Station 新建 £1,486、二手 £1,492（<b>0%</b>）。'
+    + '<br>楼盘只能用街道来界定（Price Paid 没有楼盘字段），映射写死在 '
+    + '<code>scripts/build_developments.py</code> 里，可以核对和修正。'
+    + '表中数字为 2024–2025 年成交，任一侧样本少于 8 笔不出数；曲线为逐年中位数，单年少于 6 笔断开。'
+    + '<b>Wood Wharf 的二手高于新建，不是二手更贵</b>——是它近两年的新建成交集中在较小、折扣较多的户型。';
+}
+renderDevs();
 
 /* ---------------- LSOA-level crime inside each submarket ---------------- */
 function renderLsoa(){

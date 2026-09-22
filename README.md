@@ -42,7 +42,9 @@ scripts/build_dataset.py        # merges HPI + PIPR + PPD -> data/processed/
 scripts/fetch_crime.py          # crime by borough and submarket polygon
 scripts/fetch_crime_lsoa.py     # crime at LSOA level inside the submarkets
 scripts/build_social.py         # crime + ethnicity + earnings, borough & submarket
-scripts/match_epc.py            # joins EPC floor area onto transactions -> £/sqft
+scripts/fetch_epc.py            # EPC certificates by postcode, three resumable stages
+scripts/build_psf.py            # £/sqft by submarket, new vs existing
+scripts/build_developments.py   # £/sqft by named development (street-defined)
 scripts/build_site.py           # inlines the data into web/template.html
 ```
 

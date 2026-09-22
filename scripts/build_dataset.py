@@ -312,6 +312,13 @@ if pf.exists():
         psf[k] = rec
     print(f"psf layer        : {len(psf)} submarkets")
 
+# -------------------------------------------- development-level £/sqft
+devs = {}
+dp = OUT / "developments.json"
+if dp.exists():
+    devs = json.loads(dp.read_text())
+    print(f"developments     : {len([k for k in devs if not k.startswith('_')])}")
+
 geo = json.loads(GEO_FILE.read_text())
 payload = {
     "months": months,
@@ -320,6 +327,7 @@ payload = {
     "social": social,
     "lsoa": lsoa,
     "psf": psf,
+    "devs": devs,
     "lsoa_geo": lsoa_geo,
     "social_sub": social_sub,
     "london_flat": london_flat,
