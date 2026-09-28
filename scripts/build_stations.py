@@ -18,9 +18,12 @@ Distances are computed on a local equirectangular projection. Over 800m at
 London's latitude the error against a great circle is under a metre, and the
 whole point is to be honest about a ten-minute walk, not to survey land.
 """
-import json, pathlib, re
+import json, pathlib, re, sys
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from osm_layers import load as load_osm, is_premium  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, OUT = ROOT / "data" / "raw", ROOT / "data" / "processed"
@@ -29,7 +32,6 @@ LAT0 = 51.5
 M_PER_DEG_LAT = 111_320.0
 M_PER_DEG_LON = M_PER_DEG_LAT * np.cos(np.radians(LAT0))
 RECENT = "2024-01-01"
-PREMIUM = {"Waitrose", "Marks & Spencer", "M&S Simply Food", "Whole Foods Market"}
 
 
 def xy(lat, lon):
@@ -118,13 +120,8 @@ def main():
                                                      on="LSOA code", how="inner")
     lxy = xy(saf["lat"], saf["lon"])
 
-    osm = {}
-    for p in sorted((RAW / "osm").glob("*.json")):
-        osm.setdefault(p.stem.split("_")[0] if p.stem.startswith("food") else p.stem, []).extend(
-            json.loads(p.read_text()))
-    amen = {k: (pd.DataFrame(v), xy(pd.DataFrame(v)["lat"], pd.DataFrame(v)["lon"]))
-            for k, v in osm.items()}
-    print({k: len(v[0]) for k, v in amen.items()})
+    amen = {k: (v, xy(v["lat"], v["lon"])) for k, v in load_osm().items()}
+    print("amenity layers:", {k: len(v[0]) for k, v in amen.items()})
 
     rows = []
     near_t, near_f, near_l = within(sxy, txy), within(sxy, fxy), within(sxy, lxy)
@@ -148,11 +145,14 @@ def main():
                "resident_per_1000": float(np.average(l["resident_per_1000"], weights=w)) if len(l) else np.nan,
                "home_per_1000": float(np.average(l["home_per_1000"], weights=w)) if len(l) else np.nan}
         for k, idx in near_a.items():
-            d = amen[k][0].iloc[idx[i]]
-            rec[f"n_{k}"] = len(d)
-        sh = amen["shops"][0].iloc[near_a["shops"][i]]
-        rec["premium_grocer"] = bool(sh["brand"].isin(PREMIUM).any()
-                                     or sh["name"].fillna("").str.startswith(tuple(PREMIUM)).any())
+            rec[f"n_{k}"] = len(idx[i])
+        if "shops" in amen:
+            sh = amen["shops"][0].iloc[near_a["shops"][i]]
+            rec["n_supermarket"] = int((sh["kind"] == "supermarket").sum())
+            # Waitrose and M&S Food are where they are because a retailer's own
+            # catchment model said the households around them could afford it. It
+            # is a second opinion on the area, formed independently of ours.
+            rec["premium_grocer"] = bool(is_premium(sh).any()) if len(sh) else False
         rows.append(rec)
 
     d = pd.DataFrame(rows)

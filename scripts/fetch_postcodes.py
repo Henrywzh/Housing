@@ -20,19 +20,29 @@ API = "https://api.postcodes.io/postcodes"
 CHUNK, WORKERS, CHECKPOINT = 100, 6, 200
 
 
+FAILED = []
+
+
 def lookup(batch):
+    """One batch of up to 100. A batch that never answers is recorded, not
+    swallowed: the input is sorted, so a run of dropped batches is a run of
+    neighbouring postcodes, and the first time that happened it deleted every
+    postcode in SE3, SE4 and SE23-SE28 -- which is to say most of the new-build
+    stock south of the river -- without anything in the output saying so.
+    """
     body = json.dumps({"postcodes": batch}).encode()
-    req = urllib.request.Request(API, data=body, method="POST",
-                                 headers={"Content-Type": "application/json",
-                                          "User-Agent": "housing-research/1.0"})
-    for a in range(4):
+    for a in range(6):
         try:
+            req = urllib.request.Request(API, data=body, method="POST",
+                                         headers={"Content-Type": "application/json",
+                                                  "User-Agent": "housing-research/1.0"})
             d = json.loads(urllib.request.urlopen(req, timeout=60).read())
             break
-        except Exception:
-            if a == 3:
+        except Exception as e:
+            if a == 5:
+                FAILED.append((batch[0], batch[-1], type(e).__name__))
                 return []
-            time.sleep(3 * (a + 1))
+            time.sleep(4 * (a + 1))
     rows = []
     for r in d.get("result", []):
         v = r.get("result")
@@ -65,9 +75,16 @@ def main():
                 pd.DataFrame(buf).to_csv(OUT, mode="a", header=not OUT.exists(), index=False)
                 buf = []
                 print(f"  {done}/{len(batches)} batches", flush=True)
-    n = len(pd.read_csv(OUT, usecols=["postcode"]))
-    print(f"{n:,} postcodes geocoded ({n/len(want):.1%} of Price Paid; "
-          f"the rest are terminated postcodes with no current coordinate)")
+    have = set(pd.read_csv(OUT, usecols=["postcode"], dtype=str)["postcode"])
+    n, gap = len(have), [p for p in want if p not in have]
+    print(f"{n:,} postcodes geocoded ({n/len(want):.1%} of Price Paid)")
+    if FAILED:
+        print(f"WARNING: {len(FAILED)} batches never answered; rerun to fill them:")
+        for a, b, e in FAILED[:10]:
+            print(f"  {a} .. {b}  ({e})")
+    print(f"{len(gap):,} postcodes returned no result -- terminated codes with no "
+          f"current coordinate. Rerun this script to retry; it only asks for what is "
+          f"missing, so a stable count across two runs means the gap is real.")
 
 
 if __name__ == "__main__":

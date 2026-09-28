@@ -1,0 +1,494 @@
+<title>Zone 1–4 车站地图</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+:root{
+  --plate:#e3e9ee; --plate-line:#c6d1da;
+  --paper:#f2f4f6; --panel:#ffffff; --panel-2:#f7f9fa;
+  --ink:#121b24; --ink-2:#3d4c58; --muted:#6a7884; --rule:#d9e0e6;
+  --signal:#c2402a; --signal-soft:#f0d5cf;
+  --good:#2c6f52; --warn:#9a6b12; --bad:#a8382a;
+  --shadow:0 1px 2px rgba(18,27,36,.07),0 8px 24px rgba(18,27,36,.07);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0e141a; --panel:#161e26; --panel-2:#1b242d;
+  --ink:#e7edf2; --ink-2:#b3c0cb; --muted:#8798a5; --rule:#2a353f;
+  --signal:#e8664c; --signal-soft:#48231c;
+  --good:#5fb389; --warn:#d9a640; --bad:#e07a68;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.35);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#0e141a; --panel:#161e26; --panel-2:#1b242d;
+  --ink:#e7edf2; --ink-2:#b3c0cb; --muted:#8798a5; --rule:#2a353f;
+  --signal:#e8664c; --signal-soft:#48231c;
+  --good:#5fb389; --warn:#d9a640; --bad:#e07a68;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:400 14px/1.5 "Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3,.ui{font-family:Archivo,"Source Sans 3",sans-serif;text-wrap:balance}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+#app{display:grid;grid-template-columns:300px minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);height:100%;gap:0;overflow:hidden}
+#app.with-detail{grid-template-columns:300px minmax(0,1fr) 320px}
+header{grid-column:1/-1;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--rule)}
+header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
+header .sub{color:var(--muted);font-size:12.5px;flex:1 1 200px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .stamp{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+#rail{background:var(--panel);border-right:1px solid var(--rule);
+  overflow-y:auto;display:flex;flex-direction:column}
+#mapwrap{position:relative;min-width:0;min-height:0}
+#map{position:absolute;inset:0;background:var(--plate)}
+
+/* ---------- controls ---------- */
+.block{padding:12px 14px;border-bottom:1px solid var(--rule);display:flex;
+  flex-direction:column;gap:9px}
+.lbl{font-family:Archivo,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted)}
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button{font:600 12px/1 Archivo,sans-serif;padding:6px 9px;border-radius:5px;
+  border:1px solid var(--rule);background:var(--panel-2);color:var(--ink-2);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.seg button:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.row .v{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .w{flex:0 0 34px;font-family:Archivo,sans-serif;font-size:12px;color:var(--ink-2)}
+input[type=range]{width:100%;accent-color:var(--signal)}
+label.chk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2);cursor:pointer}
+label.chk input{accent-color:var(--signal)}
+
+/* ---------- list ---------- */
+#listwrap{flex:1 1 auto;min-height:160px;overflow-y:auto}
+#count{padding:9px 14px 4px;font-size:11.5px;color:var(--muted)}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 14px;
+  border-bottom:1px solid var(--rule);cursor:pointer;background:none;border-left:0;
+  border-right:0;border-top:0;width:100%;text-align:left;font:inherit;color:inherit}
+.item:hover{background:var(--panel-2)}
+.item[aria-current="true"]{background:var(--signal-soft)}
+.item .nm{font-family:Archivo,sans-serif;font-weight:600;font-size:13.5px}
+.item .sc{font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:500;
+  font-variant-numeric:tabular-nums}
+.item .meta{grid-column:1/-1;font-size:11.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums;display:flex;gap:9px;flex-wrap:wrap}
+.pill{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10.5px;
+  font-family:Archivo,sans-serif;font-weight:600;letter-spacing:.03em}
+.pill.z{background:var(--panel-2);color:var(--muted);border:1px solid var(--rule)}
+.pill.w{background:var(--good);color:#fff}
+
+/* ---------- legend ---------- */
+#legend{position:absolute;left:12px;bottom:12px;z-index:500;background:var(--panel);
+  border:1px solid var(--rule);border-radius:7px;padding:9px 11px;box-shadow:var(--shadow);
+  max-width:230px}
+#legend .lbl{margin-bottom:6px}
+.ramp{display:flex;height:9px;border-radius:2px;overflow:hidden}
+.ramp i{flex:1}
+.ends{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);
+  margin-top:4px;font-family:"IBM Plex Mono",monospace}
+#legend .note{font-size:10.5px;color:var(--muted);margin-top:7px;line-height:1.4}
+
+/* ---------- detail ---------- */
+#detail{grid-row:2;grid-column:3;position:relative;background:var(--panel);
+  border-left:1px solid var(--rule);overflow-y:auto;padding:14px 15px 24px;min-width:0}
+#detail h2{margin:0 0 2px;font-size:19px;font-weight:700;letter-spacing:-.01em}
+#detail .where{color:var(--muted);font-size:12px;margin-bottom:11px}
+#detail .close{position:absolute;right:9px;top:9px;border:0;background:none;cursor:pointer;
+  color:var(--muted);font-size:19px;line-height:1;padding:3px 6px;border-radius:4px}
+#detail .close:hover{background:var(--panel-2);color:var(--ink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 12px}
+.kv dt{font-size:12px;color:var(--muted)}
+.kv dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:12.5px;text-align:right;
+  font-variant-numeric:tabular-nums}
+.bars{display:flex;flex-direction:column;gap:7px;margin-bottom:13px}
+.bar{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:8px;font-size:11.5px}
+.bar .t{color:var(--muted)}
+.bar .track{height:7px;background:var(--panel-2);border:1px solid var(--rule);border-radius:4px;
+  overflow:hidden}
+.bar .fill{height:100%;background:var(--ink)}
+.bar .p{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-2);min-width:30px;
+  text-align:right}
+.sect{font-family:Archivo,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);margin:14px 0 7px;padding-top:11px;
+  border-top:1px solid var(--rule)}
+.lines{display:flex;flex-wrap:wrap;gap:4px}
+.line{font-size:10.5px;font-family:Archivo,sans-serif;font-weight:600;padding:2px 6px;
+  border-radius:3px;color:#fff;white-space:nowrap}
+.caveat{font-size:11.5px;color:var(--muted);line-height:1.45;margin:9px 0 0}
+.na{color:var(--muted)}
+
+#loading{position:absolute;inset:0;display:grid;place-items:center;background:var(--plate);
+  z-index:900;font-family:Archivo,sans-serif;color:var(--ink-2);font-size:13px}
+.leaflet-container{background:var(--plate);font:inherit}
+.leaflet-bar a{background:var(--panel);color:var(--ink);border-bottom-color:var(--rule)}
+.leaflet-bar a:hover{background:var(--panel-2)}
+
+/* Under ~1100px there is no room for a third column, so the detail becomes a
+   sheet over the bottom of the map and the map keeps its width. */
+@media (max-width:1100px){
+  #app.with-detail{grid-template-columns:300px minmax(0,1fr)}
+  #detail{position:absolute;grid-row:auto;grid-column:auto;left:12px;right:12px;bottom:12px;
+    top:auto;max-height:46%;z-index:600;border:1px solid var(--rule);border-radius:9px;
+    box-shadow:var(--shadow);padding:13px 14px 16px}
+  #legend{display:none}
+}
+@media (max-width:760px){
+  #app,#app.with-detail{grid-template-columns:1fr;grid-template-rows:auto 56vh minmax(0,1fr)}
+  #rail{grid-row:3;border-right:0;border-top:1px solid var(--rule)}
+  #mapwrap{grid-row:2}
+  header h1{font-size:15px}
+  header .sub{display:none}
+}
+</style>
+
+<div id="app">
+  <header>
+    <h1>Zone 1–4 车站地图</h1>
+    <div class="sub">每个车站步行 800 米内的治安、成交价与生活设施</div>
+    <div class="stamp num" id="stamp">—</div>
+  </header>
+
+  <div id="rail">
+    <div class="block">
+      <div class="lbl">地图着色</div>
+      <div class="seg" id="metric" role="group" aria-label="地图着色指标">
+        <button data-m="home" aria-pressed="true">居家类犯罪</button>
+        <button data-m="res" aria-pressed="false">全口径犯罪</button>
+        <button data-m="none" aria-pressed="false">不着色</button>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="lbl">筛选</div>
+      <div class="seg" id="zones" role="group" aria-label="Zone">
+        <button data-z="1" aria-pressed="true">Zone 1</button>
+        <button data-z="2" aria-pressed="true">2</button>
+        <button data-z="3" aria-pressed="true">3</button>
+        <button data-z="4" aria-pressed="true">4</button>
+      </div>
+      <div class="row"><span class="lbl">公寓中位价上限</span><span class="v" id="priceV">—</span></div>
+      <input type="range" id="price" min="250" max="900" step="25" value="600" aria-label="公寓中位价上限">
+      <div class="row"><span class="lbl">居家类犯罪上限</span><span class="v" id="crimeV">—</span></div>
+      <input type="range" id="crime" min="20" max="200" step="5" value="200" aria-label="居家类犯罪上限">
+      <label class="chk"><input type="checkbox" id="prem"> 步行内有 Waitrose / M&amp;S</label>
+      <label class="chk"><input type="checkbox" id="multi"> 两条线以上</label>
+    </div>
+
+    <div class="block">
+      <div class="lbl">排序权重</div>
+      <div class="row"><span class="w">安全</span><input type="range" id="wSafe" min="0" max="3" step="1" value="1" aria-label="安全权重"></div>
+      <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
+      <div class="row"><span class="w">方便</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="方便权重"></div>
+    </div>
+
+    <div id="count">—</div>
+    <div id="listwrap"><div id="list"></div></div>
+  </div>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="loading">读取 5,000 个 LSOA 边界…</div>
+    <div id="legend">
+      <div class="lbl" id="legendTitle">居家类犯罪 / 千人 · 36 个月</div>
+      <div class="ramp" id="ramp"></div>
+      <div class="ends"><span id="rampLo">—</span><span id="rampHi">—</span></div>
+      <div class="note">深 = 高。分档按全伦敦分位数。灰色 = 该 LSOA 36 个月零记录，按未知处理。</div>
+    </div>
+  </div>
+  <div id="detail" hidden></div>
+</div>
+
+<script>
+const RAMP = ['#dbe4ec','#b8cbdb','#8fadc6','#6690b1','#3f7099','#20527d','#0d3459'];
+const NODATA = '#c9ced2';
+const LINE_COLOR = {
+  'Bakerloo':'#B36305','Central':'#E32017','Circle':'#FFD300','District':'#00782A',
+  'Hammersmith & City':'#F3A9BB','Jubilee':'#A0A5A9','Metropolitan':'#9B0056',
+  'Northern':'#000000','Piccadilly':'#003688','Victoria':'#0098D4',
+  'Waterloo & City':'#95CDBA','DLR':'#00A4A7','Elizabeth line':'#6950a1',
+  'Tram':'#84B817','London Overground':'#EE7C0E','Liberty':'#5D6061','Lioness':'#FFB600',
+  'Mildmay':'#437EC0','Suffragette':'#76B82A','Weaver':'#823A62','Windrush':'#ED1B00'
+};
+const $ = s => document.querySelector(s);
+const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
+const pct = v => Math.round(v*100);
+
+let MAP, LSOA_LAYER, STATION_LAYER, AMEN_LAYER, RING;
+let S = [], LV = {}, AM = {}, SHORT = null, BREAKS = {}, SEL = null;
+let metric = 'home';
+const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
+               w:{safe:1, cheap:1, conv:1}};
+
+/* ---------- scoring ---------- */
+function percentiles(vals){
+  const ok = vals.filter(v => v != null).slice().sort((a,b) => a-b);
+  return v => {
+    if (v == null) return null;
+    let lo = 0, hi = ok.length;
+    while (lo < hi){ const m = (lo+hi) >> 1; ok[m] < v ? lo = m+1 : hi = m; }
+    return ok.length < 2 ? .5 : lo/(ok.length-1);
+  };
+}
+function score(){
+  const pHome  = percentiles(S.map(s => s.home));
+  const pPrice = percentiles(S.map(s => s.price));
+  const pLines = percentiles(S.map(s => s.L.length));
+  const pAmen  = percentiles(S.map(s => (s.shop||0) + (s.food||0)));
+  const pPark  = percentiles(S.map(s => s.park));
+  for (const s of S){
+    s.safe  = s.home  == null ? null : 1 - pHome(s.home);
+    s.cheap = s.price == null ? null : 1 - pPrice(s.price);
+    // Convenience is four things a walk actually gives you: how many lines the
+    // station has, how central it is, what you can buy nearby and whether there
+    // is anywhere green. Each enters as a rank among Zone 1-4 stations.
+    s.conv = (pLines(s.L.length) + (4 - s.zm)/3 + pAmen((s.shop||0)+(s.food||0))
+              + pPark(s.park||0)) / 4;
+  }
+}
+function composite(s){
+  const w = state.w, parts = [[s.safe,w.safe],[s.cheap,w.cheap],[s.conv,w.conv]];
+  let n = 0, d = 0;
+  for (const [v,k] of parts) if (v != null && k > 0){ n += v*k; d += k; }
+  return d ? n/d : null;
+}
+
+/* ---------- choropleth ---------- */
+function quantileBreaks(vals, n){
+  const a = vals.filter(v => v != null).slice().sort((x,y) => x-y);
+  const b = [];
+  for (let i = 1; i < n; i++) b.push(a[Math.floor(a.length*i/n)]);
+  return b;
+}
+function bucket(v, br){
+  if (v == null) return -1;
+  let i = 0; while (i < br.length && v >= br[i]) i++;
+  return i;
+}
+function lsoaStyle(f){
+  if (metric === 'none') return {fillOpacity:0, weight:.4, color:'var(--plate-line)'};
+  const row = LV[f.properties.c];
+  const v = row ? (metric === 'home' ? row[0] : row[1]) : null;
+  const b = bucket(v, BREAKS[metric]);
+  return {fillColor: b < 0 ? NODATA : RAMP[b], fillOpacity:.82, weight:.35,
+          color:'#ffffff', opacity:.55};
+}
+
+/* ---------- filters ---------- */
+function passes(s){
+  if (!state.zones.has(s.zm)) return false;
+  if (s.price != null && s.price > state.price*1000) return false;
+  if (s.home != null && s.home > state.crime) return false;
+  if (state.prem && !s.prem) return false;
+  if (state.multi && s.L.length < 2) return false;
+  return true;
+}
+
+/* ---------- render ---------- */
+function renderStations(){
+  STATION_LAYER.clearLayers();
+  const keep = S.filter(passes);
+  const z = MAP.getZoom();
+  const base = z <= 11 ? 1.8 : z <= 12 ? 2.4 : z <= 13 ? 3.2 : 4;
+  const ring = z >= 13;
+  for (const s of keep){
+    const c = composite(s);
+    const m = L.circleMarker([s.y, s.x], {
+      radius: s === SEL ? base + 2.5 : base * (0.75 + (c == null ? .25 : c*0.5)),
+      color: '#ffffff',
+      weight: s === SEL ? 2 : (ring ? .8 : 0),
+      fillColor: s === SEL ? '#c2402a' : '#22313f',
+      fillOpacity: s === SEL ? 1 : .88, bubblingMouseEvents:false});
+    m.bindTooltip(s.n, {direction:'top', offset:[0,-4]});
+    m.on('click', () => select(s));
+    m.addTo(STATION_LAYER);
+  }
+  return keep;
+}
+function renderList(keep){
+  const sorted = keep.slice().sort((a,b) => (composite(b) ?? -1) - (composite(a) ?? -1));
+  $('#count').textContent = `${sorted.length} 个车站符合条件 · 共 ${S.length} 个 Zone 1–4 车站`;
+  const html = sorted.slice(0, 120).map(s => {
+    const c = composite(s);
+    return `<button class="item" data-n="${s.n}" aria-current="${s === SEL}">
+      <span class="nm">${s.n}</span>
+      <span class="sc">${c == null ? '—' : pct(c)}</span>
+      <span class="meta"><span class="pill z">Z${s.z}</span>
+        <span>${fmtK(s.price)}</span>
+        <span>犯罪 ${s.home == null ? '—' : s.home.toFixed(0)}</span>
+        <span>${s.L.length} 线</span>
+        ${s.prem ? '<span class="pill w">Waitrose/M&amp;S</span>' : ''}</span>
+    </button>`;
+  }).join('');
+  $('#list').innerHTML = html || '<div style="padding:18px 14px;color:var(--muted)">没有车站符合当前条件。放宽价格或治安上限。</div>';
+  for (const el of $('#list').querySelectorAll('.item'))
+    el.onclick = () => select(S.find(x => x.n === el.dataset.n));
+}
+function draw(){ renderList(renderStations()); }
+
+/* ---------- detail ---------- */
+function bar(label, v){
+  return `<div class="bar"><span class="t">${label}</span>
+    <span class="track"><span class="fill" style="width:${v == null ? 0 : pct(v)}%"></span></span>
+    <span class="p">${v == null ? '—' : pct(v)}</span></div>`;
+}
+function select(s){
+  if (!s) return;
+  SEL = s;
+  // The column may have just appeared or gone; Leaflet only learns that if told.
+  requestAnimationFrame(() => MAP.invalidateSize({pan:false}));
+  MAP.setView([s.y, s.x], Math.max(MAP.getZoom(), 13), {animate:true});
+  if (RING) RING.remove();
+  RING = L.circle([s.y, s.x], {radius:800, color:'#c2402a', weight:1.5, dashArray:'4 4',
+                               fill:false, interactive:false}).addTo(MAP);
+  showAmenities(s);
+  const d = $('#detail');
+  const sl = SHORT && Object.entries(SHORT.developments).find(([, v]) => v.station === s.n);
+  d.hidden = false;
+  $('#app').classList.add('with-detail');
+  d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
+    <h2>${s.n}</h2>
+    <div class="where">Zone ${s.z} · ${s.pop.toLocaleString()} 人住在步行 800 米内</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('方便', s.conv)}</div>
+    <div class="sect">价格 · Land Registry 2024 年起</div>
+    <dl class="kv">
+      <dt>公寓中位价</dt><dd>${s.price == null ? '<span class="na">样本不足</span>' : '£' + s.price.toLocaleString()}</dd>
+      <dt>下四分位</dt><dd>${s.p25 == null ? '<span class="na">—</span>' : '£' + s.p25.toLocaleString()}</dd>
+      <dt>成交笔数</dt><dd>${s.ns.toLocaleString()}（新房 ${s.new}）</dd>
+      <dt>每平尺</dt><dd>${s.psf == null ? '<span class="na">EPC 样本不足</span>' : '£' + s.psf + ' · ' + s.sqft + ' ft²'}</dd>
+    </dl>
+    <div class="sect">治安 · 警方 36 个月</div>
+    <dl class="kv">
+      <dt>居家类 / 千人</dt><dd>${s.home == null ? '—' : s.home.toFixed(0)}<span class="na"> · 伦敦 56</span></dd>
+      <dt>全口径 / 千人</dt><dd>${s.res == null ? '—' : s.res.toFixed(0)}<span class="na"> · 伦敦 253</span></dd>
+    </dl>
+    <div class="sect">步行 800 米内</div>
+    <dl class="kv">
+      <dt>超市 / 便利店</dt><dd>${s.smkt ?? '—'} / ${s.shop ?? '—'}</dd>
+      <dt>咖啡馆餐厅酒吧</dt><dd>${s.food ?? '—'}</dd>
+      <dt>公园</dt><dd>${s.park ?? '—'}</dd>
+      <dt>学校 / 医疗</dt><dd>${s.he ?? '—'}</dd>
+      <dt>Waitrose / M&amp;S</dt><dd>${s.prem ? '有' : '<span class="na">无</span>'}</dd>
+    </dl>
+    <div class="sect">线路</div>
+    <div class="lines">${s.L.map(l => `<span class="line" style="background:${LINE_COLOR[l] || '#5b6b78'}">${l}</span>`).join('')}</div>
+    ${sl ? devBlock(sl[0], sl[1]) : ''}
+    <p class="caveat">治安是车站 800 米内各 LSOA 按人口加权。居家类只数入室盗窃、车辆犯罪与故意毁坏——受害者就是住户本人，所以分母对得上；全口径在 Soho、牛津街这类地方会被白天人流灌爆。</p>`;
+  d.querySelector('.close').onclick = () => {
+    d.hidden = true; SEL = null;
+    $('#app').classList.remove('with-detail');
+    if (RING) RING.remove();
+    AMEN_LAYER.clearLayers();
+    MAP.invalidateSize();
+    draw();
+  };
+  draw();
+}
+function devBlock(name, v){
+  const g = v.new_vs_resale || {};
+  return `<div class="sect">楼盘 · ${name}</div>
+    <dl class="kv">
+      <dt>1 房实测面积</dt><dd>${v.sqft && v.sqft['1'] ? Math.round(v.sqft['1']) + ' ft²' : '—'}</dd>
+      <dt>2 房实测面积</dt><dd>${v.sqft && v.sqft['2'] ? Math.round(v.sqft['2']) + ' ft²' : '—'}</dd>
+      <dt>物业费</dt><dd>£${v.sc_psf}/ft²</dd>
+      <dt>新房→二手 / 平尺</dt><dd>${g.gap_psf_pct == null ? '<span class="na">样本不足</span>' : g.gap_psf_pct + '%'}</dd>
+    </dl>`;
+}
+
+/* ---------- amenities ---------- */
+const AMEN_STYLE = {shops:['#1f6f4a',3.2], parks:['#3e7d34',3.6],
+                    food:['#8a5a1f',2.4], health_edu:['#4a5c8f',3]};
+function showAmenities(s){
+  AMEN_LAYER.clearLayers();
+  const R = 0.0115, RY = 0.0072;   // ~800 m in degrees at this latitude
+  for (const [k, rows] of Object.entries(AM)){
+    const [col, r] = AMEN_STYLE[k] || ['#666', 2.5];
+    for (const p of rows){
+      if (Math.abs(p[0]-s.y) > RY || Math.abs(p[1]-s.x) > R) continue;
+      const prem = p.length > 3;
+      L.circleMarker([p[0], p[1]], {
+        radius: prem ? 5 : r, color: prem ? '#ffffff' : col, weight: prem ? 1.5 : 0,
+        fillColor: prem ? '#2c6f52' : col, fillOpacity: prem ? 1 : .55,
+        interactive:true, bubblingMouseEvents:false})
+        .bindTooltip(prem ? p[3] : p[2], {direction:'top'}).addTo(AMEN_LAYER);
+    }
+  }
+}
+
+/* ---------- wiring ---------- */
+function wire(){
+  $('#metric').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    metric = b.dataset.m;
+    for (const x of $('#metric').children) x.setAttribute('aria-pressed', x === b);
+    $('#legendTitle').textContent = metric === 'home' ? '居家类犯罪 / 千人 · 36 个月'
+      : metric === 'res' ? '全口径犯罪 / 千人 · 36 个月' : '不着色';
+    drawLegend();
+    LSOA_LAYER.setStyle(lsoaStyle);
+  };
+  $('#zones').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const z = +b.dataset.z, on = b.getAttribute('aria-pressed') === 'true';
+    on ? state.zones.delete(z) : state.zones.add(z);
+    b.setAttribute('aria-pressed', !on);
+    draw();
+  };
+  const sync = () => {
+    state.price = +$('#price').value; state.crime = +$('#crime').value;
+    state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
+    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
+    $('#priceV').textContent = '≤ £' + state.price + 'k';
+    $('#crimeV').textContent = state.crime >= 200 ? '不限' : '≤ ' + state.crime;
+    draw();
+  };
+  for (const id of ['price','crime','prem','multi','wSafe','wCheap','wConv'])
+    $('#' + id).addEventListener('input', sync);
+  sync();
+}
+function drawLegend(){
+  const br = BREAKS[metric];
+  if (!br){ $('#ramp').innerHTML = ''; $('#rampLo').textContent = ''; $('#rampHi').textContent = ''; return; }
+  $('#ramp').innerHTML = RAMP.map(c => `<i style="background:${c}"></i>`).join('');
+  $('#rampLo').textContent = '0';
+  $('#rampHi').textContent = Math.round(br[br.length-1]) + '+';
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  const j = p => fetch(p).then(r => r.json());
+  const [lsoa, bor, stations, values, amen, short] = await Promise.all([
+    j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
+    j('data/lsoa_values.json'), j('data/amenities.json'),
+    j('data/shortlist.json').catch(() => null)]);
+  S = stations; LV = values; AM = amen; SHORT = short;
+
+  BREAKS.home = quantileBreaks(Object.values(LV).map(v => v[0]), RAMP.length);
+  BREAKS.res  = quantileBreaks(Object.values(LV).map(v => v[1]), RAMP.length);
+
+  MAP = L.map('map', {preferCanvas:true, zoomControl:true, attributionControl:false})
+        .setView([51.505, -0.09], 11);
+  LSOA_LAYER = L.geoJSON(lsoa, {style:lsoaStyle, interactive:false}).addTo(MAP);
+  L.geoJSON(bor, {style:{fill:false, color:'#8ea0ae', weight:1, opacity:.9},
+                  interactive:false}).addTo(MAP);
+  AMEN_LAYER = L.layerGroup().addTo(MAP);
+  STATION_LAYER = L.layerGroup().addTo(MAP);
+  MAP.on('zoomend', () => renderStations());
+
+  score(); drawLegend(); wire();
+  $('#stamp').textContent = `${S.length} 站 · ${Object.keys(LV).length.toLocaleString()} LSOA`;
+  $('#loading').remove();
+  // Open on a station that makes the point: cheap, Zone 3, on the resale shortlist.
+  select(S.find(s => s.n === 'Kidbrooke') || S[0]);
+}
+boot();
+</script>

@@ -19,37 +19,87 @@ OUT.mkdir(parents=True, exist_ok=True)
 # Zone 1-4 stations span 51.375-51.638 N, 0.379 W - 0.121 E; +1km of walking room.
 S, W, N, E = 51.365, -0.392, 51.650, 0.135
 UA = {"User-Agent": "housing-research/1.0"}
-# overpass.kumi.systems hangs until the socket timeout rather than refusing, so
-# alternating to it turned every retry into a seven-minute wait for nothing.
+# overpass-api.de rotates over several backends and some of them answer a query
+# that touches ways with an immediate 504; the same query succeeds seconds later
+# on another. So retries are cheap and worth taking, and the box only gets split
+# after six of them. kumi.systems is not in the list because it hangs until the
+# socket timeout rather than refusing, which turned every retry into a long wait
+# for nothing. overpass.osm.ch returns an empty set outside Switzerland.
 ENDPOINTS = ["https://overpass-api.de/api/interpreter",
              "https://overpass.private.coffee/api/interpreter"]
 
+# Exact tag values, never a regex. Overpass has an index on the value of a tag
+# and a regex cannot use it, so ["shop"~"^(supermarket|convenience)$"] scans the
+# whole box and times out over inner London while ["shop"="supermarket"] answers
+# the same box in seconds.
 LAYERS = {
-    "shops": ('node["shop"~"^(supermarket|convenience|department_store|greengrocer|bakery)$"]({b});'
-              'way["shop"~"^(supermarket|convenience|department_store)$"]({b});'
-              'node["shop"="mall"]({b});way["shop"="mall"]({b});', 3),
-    "parks": ('way["leisure"~"^(park|garden|nature_reserve)$"]({b});'
-              'relation["leisure"~"^(park|garden|nature_reserve)$"]({b});', 3),
-    "health_edu": ('node["amenity"~"^(hospital|clinic|pharmacy|doctors)$"]({b});'
-                   'way["amenity"~"^(hospital|clinic)$"]({b});'
-                   'way["amenity"~"^(school|college|university)$"]({b});'
-                   'node["amenity"~"^(school|college|university)$"]({b});', 3),
-    "food": ('node["amenity"~"^(cafe|restaurant|pub|bar)$"]({b});', 4),
+    "shops": ({"node": [("shop", v) for v in
+                        ("supermarket", "convenience", "department_store", "greengrocer",
+                         "bakery", "mall")],
+               "way": [("shop", v) for v in
+                       ("supermarket", "convenience", "department_store", "mall")]}, 3),
+    "parks": ({"way": [("leisure", v) for v in ("park", "garden", "nature_reserve")],
+               "relation": [("leisure", v) for v in ("park", "garden", "nature_reserve")]}, 3),
+    "health_edu": ({"node": [("amenity", v) for v in
+                             ("hospital", "clinic", "pharmacy", "doctors", "school",
+                              "college", "university")],
+                    "way": [("amenity", v) for v in
+                            ("hospital", "clinic", "school", "college", "university")]}, 3),
+    "food": ({"node": [("amenity", v) for v in ("cafe", "restaurant", "pub", "bar")]}, 4),
 }
 
 
-def overpass(q, tries=5):
+
+class Timeout(Exception):
+    pass
+
+
+def overpass(q, tries=6):
     for a in range(tries):
         ep = ENDPOINTS[a % len(ENDPOINTS)]
         try:
             req = urllib.request.Request(ep, data=urllib.parse.urlencode({"data": q}).encode(),
                                          headers=UA)
-            return json.loads(urllib.request.urlopen(req, timeout=240).read())
+            return json.loads(urllib.request.urlopen(req, timeout=120).read())
         except Exception as e:
-            print(f"    retry {a+1} ({type(e).__name__})", flush=True)
+            code = getattr(e, "code", None)
+            print(f"    retry {a+1} ({type(e).__name__}{' ' + str(code) if code else ''})",
+                  flush=True)
             if a == tries - 1:
-                raise
-            time.sleep(20 * (a + 1))
+                # 504 and a socket timeout both mean the box is too big to answer,
+                # not that the server is down: the caller should split it.
+                raise Timeout(q) from e
+            time.sleep(10 * (a + 1))
+
+
+def quarters(box):
+    s, w, n, e = [float(x) for x in box.split(",")]
+    for i in range(2):
+        for j in range(2):
+            yield (f"{s + (n - s) * i / 2},{w + (e - w) * j / 2},"
+                   f"{s + (n - s) * (i + 1) / 2},{w + (e - w) * (j + 1) / 2}")
+
+
+def collect(body, box, depth=0):
+    """Elements in a box, splitting the box whenever the server times out.
+
+    Central London answers a shop query in seconds at the edges and not at all
+    over the middle, so a fixed grid either wastes requests on empty fields or
+    dies on the dense ones. Splitting only what fails costs one wasted attempt
+    per hot tile and needs no guess about where the hot tiles are.
+    """
+    stmts = "".join(f'{t}["{k}"="{v}"]({box});' for t, kv in body.items() for k, v in kv)
+    q = f"[out:json][timeout:180];({stmts});out center tags;"
+    try:
+        return overpass(q).get("elements", [])
+    except Timeout:
+        if depth >= 3:
+            raise
+        print(f"    splitting {box} (depth {depth + 1})", flush=True)
+        out = []
+        for sub in quarters(box):
+            out += collect(body, sub, depth + 1)
+        return out
 
 
 def tiles(n):
@@ -68,8 +118,7 @@ def main():
         for k, box in enumerate(tiles(n), 1):
             part = OUT / f".{name}.{n}x{n}.{k}.json"
             if not part.exists():
-                q = f"[out:json][timeout:300];({body.format(b=box)});out center tags;"
-                part.write_text(json.dumps(overpass(q).get("elements", [])))
+                part.write_text(json.dumps(collect(body, box)))
             els = json.loads(part.read_text())
             for e in els:
                 # A tile boundary splits nothing, but a way can be returned by two
