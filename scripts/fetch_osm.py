@@ -1,70 +1,96 @@
 """Amenity layers for the map, from OpenStreetMap via Overpass.
 
-Artifact pages cannot load an external tile server -- the CSP blocks it -- so
-every map layer has to ship with the page. Overpass gives us the features as
-GeoJSON-able points, which is light enough to publish alongside the artifact
-and rich enough to answer "is there a Waitrose / a park / a station near this
-flat", which is what "convenient" actually means to a buyer.
+An artifact page cannot load an external tile server -- the CSP blocks it -- so
+every layer has to ship with the page. Overpass returns the features as points,
+light enough to publish alongside the artifact and enough to answer "is there a
+Waitrose, a park, a station within a ten-minute walk", which is what
+"convenient" means to a buyer.
+
+The box covers every Zone 1-4 station plus a kilometre of walking room. It is
+asked for in tiles rather than whole: a single query for all of London's cafes
+and pubs times out at the Overpass gateway, and a tile that fails only costs
+that tile, because finished tiles are kept on disk.
 """
 import json, pathlib, time, urllib.parse, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "raw" / "osm"
 OUT.mkdir(parents=True, exist_ok=True)
-BBOX = "51.35,-0.35,51.62,0.15"          # roughly Zone 1-4
+# Zone 1-4 stations span 51.375-51.638 N, 0.379 W - 0.121 E; +1km of walking room.
+S, W, N, E = 51.365, -0.392, 51.650, 0.135
 UA = {"User-Agent": "housing-research/1.0"}
+# overpass.kumi.systems hangs until the socket timeout rather than refusing, so
+# alternating to it turned every retry into a seven-minute wait for nothing.
 ENDPOINTS = ["https://overpass-api.de/api/interpreter",
-             "https://overpass.kumi.systems/api/interpreter"]
+             "https://overpass.private.coffee/api/interpreter"]
+
+LAYERS = {
+    "shops": ('node["shop"~"^(supermarket|convenience|department_store|greengrocer|bakery)$"]({b});'
+              'way["shop"~"^(supermarket|convenience|department_store)$"]({b});'
+              'node["shop"="mall"]({b});way["shop"="mall"]({b});', 3),
+    "parks": ('way["leisure"~"^(park|garden|nature_reserve)$"]({b});'
+              'relation["leisure"~"^(park|garden|nature_reserve)$"]({b});', 3),
+    "health_edu": ('node["amenity"~"^(hospital|clinic|pharmacy|doctors)$"]({b});'
+                   'way["amenity"~"^(hospital|clinic)$"]({b});'
+                   'way["amenity"~"^(school|college|university)$"]({b});'
+                   'node["amenity"~"^(school|college|university)$"]({b});', 3),
+    "food": ('node["amenity"~"^(cafe|restaurant|pub|bar)$"]({b});', 4),
+}
 
 
-def overpass(q, tries=4):
+def overpass(q, tries=5):
     for a in range(tries):
         ep = ENDPOINTS[a % len(ENDPOINTS)]
         try:
             req = urllib.request.Request(ep, data=urllib.parse.urlencode({"data": q}).encode(),
                                          headers=UA)
-            return json.loads(urllib.request.urlopen(req, timeout=420).read())
+            return json.loads(urllib.request.urlopen(req, timeout=240).read())
         except Exception as e:
-            print(f"  retry {a+1} ({type(e).__name__})", flush=True)
-            if a < tries - 1:
-                time.sleep(15 * (a + 1)); continue
-            raise
+            print(f"    retry {a+1} ({type(e).__name__})", flush=True)
+            if a == tries - 1:
+                raise
+            time.sleep(20 * (a + 1))
 
 
-QUERIES = {
-    "shops": f'''[out:json][timeout:300];
-(node["shop"~"^(supermarket|convenience|department_store)$"]({BBOX});
- way["shop"~"^(supermarket|convenience|department_store)$"]({BBOX}););
-out center tags;''',
-    "parks": f'''[out:json][timeout:300];
-(way["leisure"="park"]({BBOX});
- relation["leisure"="park"]({BBOX}););
-out center tags;''',
-    "health_edu": f'''[out:json][timeout:300];
-(node["amenity"~"^(hospital|clinic|pharmacy)$"]({BBOX});
- way["amenity"~"^(hospital|clinic)$"]({BBOX});
- way["amenity"="school"]({BBOX}););
-out center tags;''',
-    "food": f'''[out:json][timeout:300];
-(node["amenity"~"^(cafe|restaurant|pub)$"]({BBOX}););
-out center tags;''',
-}
+def tiles(n):
+    for i in range(n):
+        for j in range(n):
+            yield (f"{S + (N - S) * i / n},{W + (E - W) * j / n},"
+                   f"{S + (N - S) * (i + 1) / n},{W + (E - W) * (j + 1) / n}")
+
+
+def main():
+    for name, (body, n) in LAYERS.items():
+        out = OUT / f"{name}.json"
+        if out.exists():
+            print(f"have {out.name}"); continue
+        feats, seen = [], set()
+        for k, box in enumerate(tiles(n), 1):
+            part = OUT / f".{name}.{n}x{n}.{k}.json"
+            if not part.exists():
+                q = f"[out:json][timeout:300];({body.format(b=box)});out center tags;"
+                part.write_text(json.dumps(overpass(q).get("elements", [])))
+            els = json.loads(part.read_text())
+            for e in els:
+                # A tile boundary splits nothing, but a way can be returned by two
+                # tiles when its centre falls on the line; id dedupes it.
+                oid = (e["type"], e["id"])
+                if oid in seen:
+                    continue
+                seen.add(oid)
+                c = e.get("center") or e
+                if c.get("lat") is None:
+                    continue
+                t = e.get("tags", {})
+                feats.append({"lat": round(c["lat"], 5), "lon": round(c["lon"], 5),
+                              "name": t.get("name"), "brand": t.get("brand"),
+                              "kind": t.get("shop") or t.get("amenity") or t.get("leisure")})
+            print(f"  {name} tile {k}/{n*n}: {len(feats):,} kept", flush=True)
+        out.write_text(json.dumps(feats, ensure_ascii=False))
+        for p in OUT.glob(f".{name}.*.json"):
+            p.unlink()
+        print(f"{name}: {len(feats):,} features ({out.stat().st_size/1e6:.1f} MB)", flush=True)
+
 
 if __name__ == "__main__":
-    for name, q in QUERIES.items():
-        print(f"{name} ...", flush=True)
-        d = overpass(q)
-        els = d.get("elements", [])
-        feats = []
-        for e in els:
-            c = e.get("center") or e
-            lat, lon = c.get("lat"), c.get("lon")
-            if lat is None or lon is None:
-                continue
-            t = e.get("tags", {})
-            feats.append({"lat": round(lat, 5), "lon": round(lon, 5),
-                          "name": t.get("name"), "brand": t.get("brand"),
-                          "kind": t.get("shop") or t.get("amenity") or t.get("leisure")})
-        p = OUT / f"{name}.json"
-        p.write_text(json.dumps(feats, ensure_ascii=False))
-        print(f"  {len(feats):,} features -> {p.name} ({p.stat().st_size/1e6:.1f} MB)", flush=True)
+    main()

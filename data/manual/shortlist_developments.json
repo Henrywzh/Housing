@@ -1,0 +1,188 @@
+{
+  "_note": "Hand-collected from Rightmove/OnTheMarket listings, 2026-09-28. Asking rents, not achieved rents, and asking prices, not sold prices -- both are what a buyer can see today, and both run ahead of the registered data. Every service charge and ground rent is either a figure a listing disclosed (sc_src / gr_src says which) or a stated assumption. Refresh by re-reading the search URLs.",
+  "retrieved": "2026-09-28",
+  "developments": {
+    "Millbrook Park": {
+      "area": "Mill Hill East, Barnet NW7",
+      "ll": [
+        51.6128,
+        -0.2105
+      ],
+      "station": "Mill Hill East",
+      "streets": [
+        "INGLIS WAY",
+        "HENRY DARLOT DRIVE",
+        "ROYAL ENGINEERS WAY",
+        "REGIMENT HILL",
+        "COPT PLACE",
+        "MEDAWAR DRIVE",
+        "CORNFORTH LANE",
+        "BITTACY HILL",
+        "MAURICE BROWNE AVENUE",
+        "EXPLORER WAY",
+        "INDIA WAY",
+        "HAREWOOD AVENUE",
+        "MEANDER ROAD"
+      ],
+      "sc_psf": 2.9,
+      "sc_src": "Ellis & Co listing: 2-bed about GBP 2,300/yr (~GBP 2.9/sqft)",
+      "gr": 568,
+      "gr_src": "same listing discloses GBP 568/yr (pre-2022 lease)",
+      "rents": {
+        "1": [
+          2000,
+          2200,
+          2000,
+          1500
+        ],
+        "2": [
+          2250,
+          2300,
+          2300,
+          2300,
+          2750,
+          2750,
+          2500,
+          2650,
+          2350,
+          2700
+        ]
+      },
+      "search": "https://www.rightmove.co.uk/property-for-sale/Mill-Hill/1-bed-flats.html"
+    },
+    "Colindale Gardens": {
+      "area": "Colindale, Barnet NW9",
+      "ll": [
+        51.5962,
+        -0.253
+      ],
+      "station": "Colindale",
+      "streets": [
+        "CAVERSHAM ROAD",
+        "ACHILL CLOSE",
+        "HOY CLOSE",
+        "BUTE CLOSE",
+        "COMMANDER AVENUE",
+        "EAST DRIVE",
+        "AERODROME ROAD",
+        "SANDAY DRIVE"
+      ],
+      "sc_psf": 3.33,
+      "sc_src": "OnTheMarket listing (Bronze House, 2-bed): GBP 2,500/yr (~GBP 3.3/sqft)",
+      "gr": 350,
+      "gr_src": "no disclosed figure found; GBP 350/yr assumed as a common pre-2022 level, GBP 0 for post-Jun-2022 leases",
+      "rents": {
+        "1": [
+          2100,
+          1950,
+          2000,
+          1760,
+          1950
+        ],
+        "2": [
+          2420,
+          2340
+        ]
+      },
+      "search": "https://www.rightmove.co.uk/property-for-sale/Colindale/1-bed-flats.html"
+    },
+    "The Brentford Project": {
+      "area": "Brentford, Hounslow TW8",
+      "ll": [
+        51.486,
+        -0.305
+      ],
+      "station": "Brentford",
+      "streets": [
+        "BRADSHAW YARD",
+        "BRENT WAY",
+        "RONALDS ROAD",
+        "CATHERINE WHEEL ROAD"
+      ],
+      "sc_psf": 5.0,
+      "sc_src": "no disclosed figure found; GBP 5.0/sqft assumed (concierge/gym new-builds typically GBP 4-6)",
+      "gr": 0,
+      "gr_src": "completed 2023, so the lease is post-Act and ground rent is a peppercorn",
+      "rents": {
+        "1": [
+          2300,
+          1850
+        ],
+        "2": [
+          2900
+        ]
+      },
+      "search": "https://www.rightmove.co.uk/property-for-sale/Brentford/1-bed-flats.html"
+    },
+    "Kidbrooke Village": {
+      "area": "Kidbrooke, Greenwich SE3",
+      "ll": [
+        51.4622,
+        0.0275
+      ],
+      "station": "Kidbrooke",
+      "streets": [
+        "TIZZARD GROVE",
+        "HANDLEY DRIVE",
+        "OTTLEY DRIVE",
+        "TUDWAY ROAD",
+        "SAUNDBY LANE",
+        "PEGLER SQUARE",
+        "ANDERSON ROAD",
+        "PLOWDEN ROAD",
+        "WHITTLE ROAD",
+        "TOWNSEND ROAD",
+        "MOOREHEAD WAY",
+        "ASTELL ROAD",
+        "HENLEY CROSS",
+        "KIDBROOKE PARK ROAD"
+      ],
+      "sc_psf": 6.2,
+      "sc_src": "OnTheMarket listing (Harris Lodge, 1-bed): GBP 3,400/yr (~GBP 6.2/sqft)",
+      "gr": 500,
+      "gr_src": "same listing discloses GBP 500/yr; blocks completed after Jun 2022 are GBP 0",
+      "rents": {
+        "1": [
+          1900,
+          2330,
+          1775,
+          1950,
+          2375,
+          1820,
+          1950,
+          1800,
+          1650,
+          1800,
+          1850,
+          1950,
+          1800,
+          1750,
+          1850,
+          2000
+        ],
+        "2": [
+          2700,
+          2500,
+          2000,
+          2695,
+          2775,
+          2350,
+          2350,
+          2350,
+          2300,
+          2600,
+          2500,
+          2500,
+          2599,
+          2845,
+          2300,
+          2620,
+          2650,
+          2400
+        ]
+      },
+      "search": "https://www.rightmove.co.uk/property-for-sale/Kidbrooke/1-bed-flats.html"
+    }
+  },
+  "_streets_note": "Price Paid identifies a development only by street, so each scheme is written out as its set of streets. The sets were checked against the first and last new-build sale on every street in the postcode sector: a street that belongs to the scheme starts selling when the scheme does. That is what separates Colindale Gardens (Redrow, RAF Hendon names, from 2019) from Beaufort Park (St George, newspaper names, 2016-18) next door, and The Brentford Project (Ballymore, from 2022) from Brentford Lock West (2005-2020) on the same water."
+}

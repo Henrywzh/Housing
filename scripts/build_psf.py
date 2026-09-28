@@ -31,7 +31,14 @@ SECTOR_TO_MKT = {
     "HA9 0": "Wembley Park", "HA9 8": "Wembley Park", "W3 6": "North Acton",
     "NW10 7": "North Acton", "W12 7": "White City", "E15 1": "Stratford",
     "E15 2": "Stratford", "E20 1": "Stratford",
+    # Outer-London schemes on the resale shortlist. They are not submarkets --
+    # there is no MSOA-level social data behind them -- but they need measured
+    # floor areas for the same reason the submarkets do: the service charge is
+    # billed per square foot, so an assumed area becomes an error in the yield.
+    "NW7 1": "Mill Hill East", "NW9 4": "Colindale", "NW9 5": "Colindale",
+    "TW8 8": "Brentford", "SE3 9": "Kidbrooke",
 }
+SHORTLIST_ONLY = {"Mill Hill East", "Colindale", "Brentford", "Kidbrooke"}
 
 
 def nums(t):

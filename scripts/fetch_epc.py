@@ -24,7 +24,12 @@ API = "https://api.get-energy-performance-data.communities.gov.uk"
 
 SECTORS = ["SW8 5", "SW11 8", "SW11 7", "SE10 0", "E16 1", "E16 2", "E14 9",
            "E14 3", "E14 5", "SE16 7", "SE1 6", "SE17 1", "HA9 0", "HA9 8",
-           "W3 6", "NW10 7", "W12 7", "E15 1", "E15 2", "E20 1"]
+           "W3 6", "NW10 7", "W12 7", "E15 1", "E15 2", "E20 1",
+           # Outer-London schemes on the resale shortlist: Millbrook Park,
+           # Colindale Gardens, The Brentford Project, Kidbrooke Village. Their
+           # yields were computed on an assumed 540/750 sqft; these give the
+           # measured area instead, which feeds straight into the service charge.
+           "NW7 1", "NW9 4", "NW9 5", "TW8 8", "SE3 9"]
 COUNCILS = ["Wandsworth", "Greenwich", "Newham", "Tower Hamlets", "Southwark",
             "Brent", "Ealing", "Hammersmith and Fulham"]
 
