@@ -108,13 +108,19 @@ def main():
         s = st[st["name"] == d["station"]]
         if len(s) == 1:
             s = s.iloc[0]
-            row["catchment"] = {k: (None if pd.isna(s[k]) else
-                                    (float(s[k]) if isinstance(s[k], (int, float, np.floating))
-                                     else s[k]))
-                                for k in ("zone", "n_lines", "median_price", "p25_price",
-                                          "n_sales", "psf", "home_per_1000",
-                                          "resident_per_1000", "n_shops", "n_parks",
-                                          "n_food", "n_health_edu", "premium_grocer")}
+            # Amenity columns only exist for the layers that have been fetched, so
+            # a missing one is absent rather than null.
+            want = ("zone", "n_lines", "median_price", "p25_price", "n_sales", "psf",
+                    "home_per_1000", "resident_per_1000", "n_shops", "n_supermarket",
+                    "n_parks", "n_food", "n_health_edu", "premium_grocer")
+            row["catchment"] = {}
+            for k in want:
+                if k not in s.index:
+                    continue
+                v = s[k]
+                row["catchment"][k] = (None if pd.isna(v) else
+                                       float(v) if isinstance(v, (int, float, np.floating))
+                                       else v)
         else:
             raise SystemExit(f"{name}: station {d['station']!r} matched {len(s)} rows")
         meta[name] = row
@@ -158,7 +164,8 @@ def main():
               else f"flat n/a ({g['n_new']}/{g['n_resale']})")
         print(f"{n:22s} 1b {a1} sqft (n={m['sqft_n'][1]:3d})  2b {a2} sqft "
               f"(n={m['sqft_n'][2]:3d})  new->resale {pc}, {pf}  "
-              f"home-crime {m['catchment']['home_per_1000']:.0f}")
+              f"home-crime {m['catchment']['home_per_1000']:.0f}  "
+              f"psf GBP {m['catchment'].get('psf') or float('nan'):.0f}")
     print()
     print(out[["development", "beds", "price", "sqft", "sqft_src", "psf_asking", "rent_pcm",
                "service_charge", "gross_yield", "net_after_mgmt"]].to_string(index=False))
