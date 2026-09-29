@@ -55,15 +55,19 @@ def main():
     # --- LSOA geometry with its values baked in ----------------------------
     # MapLibre colours a fill from the feature's own properties, so the numbers
     # travel inside the geometry rather than in a second file joined at runtime.
-    saf = pd.read_csv(PROC / "lsoa_safety.csv").set_index("LSOA code")
+    met = pd.read_csv(PROC / "lsoa_metrics.csv").set_index("lsoa")
     geo = json.loads((PROC / "lsoa_london.geojson").read_text())
+    KEYS = {"h": ("home_per_1000", 1), "r": ("resident_per_1000", 0),
+            "p": ("median", 0), "nb": ("new_pct", 0), "t": ("turnover", 1)}
     hit = 0
     for f in geo["features"]:
         code = f["properties"]["c"]
-        if code in saf.index:
-            r = saf.loc[code]
-            f["properties"]["h"] = num(r["home_per_1000"], 1)
-            f["properties"]["r"] = num(r["resident_per_1000"])
+        if code in met.index:
+            r = met.loc[code]
+            for k, (col, nd) in KEYS.items():
+                v = num(r[col], nd)
+                if v is not None:
+                    f["properties"][k] = v
             hit += 1
     (WEB / "lsoa.geojson").write_text(json.dumps(geo, separators=(",", ":")))
     print(f"lsoa.geojson: {hit:,}/{len(geo['features']):,} with values, "
@@ -74,9 +78,13 @@ def main():
 
     # Break points for the choropleth, computed here so the page does not have to
     # hold every LSOA value just to work out its own legend.
-    breaks = {k: [round(v, 1) for v in saf[c].quantile(
+    breaks = {k: [round(v, 1) for v in met[c].dropna().quantile(
         [i / 7 for i in range(1, 7)]).tolist()]
-        for k, c in (("h", "home_per_1000"), ("r", "resident_per_1000"))}
+        for k, (c, _) in KEYS.items()}
+    # Two thirds of LSOAs have sold no new-build at all since 2019, so quantile
+    # breaks put six of the seven bands at zero and the map goes flat. Fixed
+    # bands instead, at shares a reader can name.
+    breaks["nb"] = [1, 5, 10, 20, 35, 55]
     (WEB / "breaks.json").write_text(json.dumps(breaks))
     print("breaks:", breaks)
 
@@ -95,6 +103,30 @@ def main():
         print(f"  {name}: {len(rows):,} ({int(prem.sum())} premium grocers)")
     (WEB / "amenities.json").write_text(json.dumps(pts, separators=(",", ":")))
     print(f"amenities.json: {(WEB / 'amenities.json').stat().st_size/1e6:.1f} MB")
+
+    sc = pd.read_csv(PROC / "schemes.csv")
+    lst_streets = set()
+    slp = PROC / "shortlist.json"
+    if slp.exists():
+        lst_streets = {(r["street"], r["development"])
+                       for r in json.loads(slp.read_text())["listings"] if r.get("street")}
+    rows = []
+    for r in sc.itertuples():
+        rows.append({
+            "s": r.street.title(), "sec": r.sector, "y": round(r.lat, 5), "x": round(r.lon, 5),
+            "st": r.station, "z": r.zone, "zm": int(r.zone_min), "d": int(r.station_m),
+            "nn": int(r.n_new), "nr": int(r.n_resale),
+            "f": r.first_new[:7], "l": (r.last_resale[:7] if isinstance(r.last_resale, str) else None),
+            "rm": num(r.resale_median), "r25": num(r.resale_p25), "nm": num(r.new_median),
+            "psf": num(r.psf), "gap": num(r.gap_pct, 1),
+            "ps": num(r.part_share_pct, 1), "pre": bool(r.pre_existing_stock),
+            "home": num(r.home_per_1000, 1),
+            "shop": int(r.n_shops), "food": int(r.n_food), "park": int(r.n_parks),
+            "prem": bool(r.premium_grocer),
+            "has": any(r.street == a for a, _ in lst_streets)})
+    (WEB / "schemes.json").write_text(json.dumps(rows, separators=(",", ":")))
+    print(f"{len(rows):,} Zone 1-4 schemes -> schemes.json "
+          f"({(WEB / 'schemes.json').stat().st_size/1e3:.0f} KB)")
 
     sl = PROC / "shortlist.json"
     if sl.exists():

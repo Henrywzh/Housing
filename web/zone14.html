@@ -49,13 +49,16 @@ header .sub{color:var(--muted);font-size:12.5px;flex:1 1 200px;min-width:0;
 header .stamp{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
   font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 
-#rail{background:var(--panel);border-right:1px solid var(--rule);overflow-y:auto;
-  display:flex;flex-direction:column}
+#rail{background:var(--panel);border-right:1px solid var(--rule);overflow:hidden;
+  display:flex;flex-direction:column;min-height:0}
+#controls{overflow-y:auto;flex:0 0 auto;max-height:58%}
 #mapwrap{position:relative;min-width:0;min-height:0}
 #map{position:absolute;inset:0;background:var(--plate)}
 
-.block{padding:12px 14px;border-bottom:1px solid var(--rule);display:flex;
-  flex-direction:column;gap:9px}
+.block{padding:10px 14px;border-bottom:1px solid var(--rule);display:flex;
+  flex-direction:column;gap:7px}
+.block.two{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+.block.two .lbl{grid-column:1/-1}
 .lbl{font-family:Archivo,sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.09em;
   text-transform:uppercase;color:var(--muted)}
 .seg{display:flex;flex-wrap:wrap;gap:5px}
@@ -156,6 +159,7 @@ label.chk input{accent-color:var(--signal)}
 @media (max-width:760px){
   #app,#app.with-detail{grid-template-columns:1fr;grid-template-rows:auto 56vh minmax(0,1fr)}
   #rail{grid-row:3;border-right:0;border-top:1px solid var(--rule)}
+  #controls{max-height:none;flex:0 0 auto}
   #mapwrap{grid-row:2}
   header h1{font-size:15px}
   header .sub{display:none}
@@ -170,13 +174,28 @@ label.chk input{accent-color:var(--signal)}
   </header>
 
   <div id="rail">
+    <div id="controls">
     <div class="block">
       <div class="lbl">地图着色</div>
       <div class="seg" id="metric" role="group" aria-label="地图着色指标">
         <button data-m="h" aria-pressed="true">居家类犯罪</button>
         <button data-m="r" aria-pressed="false">全口径犯罪</button>
+        <button data-m="p" aria-pressed="false">公寓中位价</button>
+        <button data-m="nb" aria-pressed="false">新房占比</button>
+        <button data-m="t" aria-pressed="false">年成交量</button>
         <button data-m="none" aria-pressed="false">只看底图</button>
       </div>
+      <div class="row"><span class="lbl">着色浓度</span><span class="v" id="opV">—</span></div>
+      <input type="range" id="op" min="0" max="85" step="5" value="45" aria-label="着色浓度">
+    </div>
+
+    <div class="block two">
+      <div class="lbl">地图上显示</div>
+      <label class="chk"><input type="checkbox" id="lyStn" checked> 车站</label>
+      <label class="chk"><input type="checkbox" id="lyPrem" checked> Waitrose / M&amp;S</label>
+      <label class="chk"><input type="checkbox" id="lyMkt"> 所有超市（放大后）</label>
+      <label class="chk"><input type="checkbox" id="lySch" checked> 候选楼盘</label>
+      <label class="chk"><input type="checkbox" id="lyLst" checked> 在售房源</label>
     </div>
 
     <div class="block">
@@ -187,13 +206,13 @@ label.chk input{accent-color:var(--signal)}
         <button data-z="3" aria-pressed="true">3</button>
         <button data-z="4" aria-pressed="true">4</button>
       </div>
-      <div class="row"><span class="lbl">公寓中位价上限</span><span class="v" id="priceV">—</span></div>
-      <input type="range" id="price" min="250" max="900" step="25" value="600" aria-label="公寓中位价上限">
+      <div class="row"><span class="lbl">价格上限</span><span class="v" id="priceV">—</span></div>
+      <input type="range" id="price" min="250" max="900" step="25" value="600" aria-label="价格上限">
       <div class="row"><span class="lbl">居家类犯罪上限</span><span class="v" id="crimeV">—</span></div>
       <input type="range" id="crime" min="20" max="200" step="5" value="200" aria-label="居家类犯罪上限">
       <label class="chk"><input type="checkbox" id="prem"> 步行内有 Waitrose / M&amp;S</label>
-      <label class="chk"><input type="checkbox" id="multi"> 两条线以上</label>
-      <label class="chk"><input type="checkbox" id="lst" checked> 显示 32 个候选二手房源</label>
+      <label class="chk"><input type="checkbox" id="multi"> 两条线以上（车站）</label>
+      <label class="chk"><input type="checkbox" id="resale" checked> 已有二手回流（楼盘）</label>
     </div>
 
     <div class="block">
@@ -201,6 +220,15 @@ label.chk input{accent-color:var(--signal)}
       <div class="row"><span class="w">安全</span><input type="range" id="wSafe" min="0" max="3" step="1" value="1" aria-label="安全权重"></div>
       <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
       <div class="row"><span class="w">方便</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="方便权重"></div>
+    </div>
+
+    </div><!-- /#controls -->
+
+    <div class="block" style="border-bottom:0;padding-bottom:6px">
+      <div class="seg" id="mode" role="group" aria-label="列表内容">
+        <button data-k="station" aria-pressed="true">车站排名</button>
+        <button data-k="scheme" aria-pressed="false">楼盘排名</button>
+      </div>
     </div>
 
     <div id="count">—</div>
@@ -214,7 +242,7 @@ label.chk input{accent-color:var(--signal)}
       <div class="lbl" id="legendTitle">居家类犯罪 / 千人 · 36 个月</div>
       <div class="ramp" id="ramp"></div>
       <div class="ends"><span id="rampLo">—</span><span id="rampHi">—</span></div>
-      <div class="note">深 = 高。分档按全伦敦分位数。灰 = 该 LSOA 36 个月零记录，按未知处理。</div>
+      <div class="note" id="legendNote">深 = 高。分档按全伦敦分位数。灰 = 无数据。</div>
     </div>
   </div>
   <div id="detail" hidden></div>
@@ -236,9 +264,19 @@ const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
 let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'h', ready = false;
-let LGROUPS = [];
+let LGROUPS = [], SC = [], mode = 'station';
+
+const METRIC = {
+  h:  {t:'居家类犯罪 / 千人 · 36 个月', n:'入室盗窃 + 车辆犯罪 + 故意毁坏。受害者就是住户本人，所以按居住人口算才对得上。', f:v => v.toFixed(0)},
+  r:  {t:'全口径犯罪 / 千人 · 36 个月', n:'所有报案。Soho、牛津街这类地方会被白天人流灌爆。', f:v => v.toFixed(0)},
+  p:  {t:'公寓中位价 · 2024 年起', n:'Land Registry 实际成交。少于 10 笔不出数。', f:v => '£' + Math.round(v/1000) + 'k'},
+  nb: {t:'新房占比 · 2019 年起 %', n:'开发商新盘占该 LSOA 公寓成交的比例。分档固定，因为三分之二的 LSOA 是 0。', f:v => v.toFixed(0) + '%'},
+  t:  {t:'年成交量 / 千居民', n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。', f:v => v.toFixed(1)},
+};
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
-               listings:true, w:{safe:1, cheap:1, conv:1}};
+               resale:true, op:0.45,
+               layers:{stn:true, prem:true, mkt:false, sch:true, lst:true},
+               w:{safe:1, cheap:1, conv:1}};
 
 /* ---------- scoring ---------- */
 function percentiles(vals){
@@ -266,6 +304,31 @@ function score(){
               + pPark(s.park||0)) / 4;
   }
 }
+function scoreSchemes(){
+  const pHome = percentiles(SC.map(x => x.home));
+  const pPrice = percentiles(SC.map(x => x.rm ?? x.nm));
+  const pAmen = percentiles(SC.map(x => (x.shop||0) + (x.food||0)));
+  const pPark = percentiles(SC.map(x => x.park));
+  const pWalk = percentiles(SC.map(x => x.d));
+  for (const x of SC){
+    x.price = x.rm ?? x.nm;
+    x.safe = x.home == null ? null : 1 - pHome(x.home);
+    x.cheap = x.price == null ? null : 1 - pPrice(x.price);
+    // Convenience for a scheme is the walk to its station, the zone that station
+    // is in, and what else is inside the same 800m.
+    x.conv = ((1 - pWalk(x.d)) + (4 - x.zm)/3 + pAmen((x.shop||0)+(x.food||0))
+              + pPark(x.park||0)) / 4;
+  }
+}
+function passesScheme(x){
+  if (!state.zones.has(x.zm)) return false;
+  if (x.price != null && x.price > state.price*1000) return false;
+  if (x.home != null && x.home > state.crime) return false;
+  if (state.prem && !x.prem) return false;
+  if (state.resale && !(x.nr >= 5 && x.rm != null)) return false;
+  return true;
+}
+
 function composite(s){
   const w = state.w, parts = [[s.safe,w.safe],[s.cheap,w.cheap],[s.conv,w.conv]];
   let n = 0, d = 0;
@@ -336,20 +399,43 @@ function groupListings(rows){
   });
 }
 function listingFC(){
-  return {type:'FeatureCollection', features:(state.listings ? LGROUPS : []).map(g => ({
+  return {type:'FeatureCollection', features:(state.layers.lst ? LGROUPS : []).map(g => ({
     type:'Feature', geometry:{type:'Point', coordinates:[g.lon, g.lat]},
     properties:{i:g.i, n:g.rows.length, label:String(g.rows.length)}}))};
 }
 
+function schemeFC(list){
+  return {type:'FeatureCollection', features:list.map(x => ({
+    type:'Feature', geometry:{type:'Point', coordinates:[x.x, x.y]},
+    properties:{i:x.i, c:composite(x) ?? 0, has:x.has ? 1 : 0}}))};
+}
+function shopFC(kinds){
+  const out = [];
+  for (const p of (AM.shops || [])){
+    const prem = p.length > 3;
+    if (kinds === 'prem' ? !prem : !(p[2] === 'supermarket' && !prem)) continue;
+    out.push({type:'Feature', geometry:{type:'Point', coordinates:[p[1], p[0]]},
+              properties:{name:(prem ? p[3] : '') || '超市'}});
+  }
+  return {type:'FeatureCollection', features:out};
+}
+
 /* ---------- render ---------- */
 function draw(){
-  const keep = S.filter(passes);
-  if (ready) MAP.getSource('stations').setData(stationFC(keep));
+  const keepS = S.filter(passes), keepC = SC.filter(passesScheme);
+  if (ready){
+    MAP.getSource('stations').setData(stationFC(state.layers.stn ? keepS : []));
+    MAP.getSource('schemes').setData(schemeFC(state.layers.sch ? keepC : []));
+    MAP.getSource('listings').setData(listingFC());
+  }
+  if (mode === 'station') drawStations(keepS); else drawSchemes(keepC);
+}
+function drawStations(keep){
   const sorted = keep.slice().sort((a,b) => (composite(b) ?? -1) - (composite(a) ?? -1));
   $('#count').textContent = `${sorted.length} 个车站符合条件 · 共 ${S.length} 个 Zone 1–4 车站`;
   $('#list').innerHTML = sorted.slice(0, 120).map(s => {
     const c = composite(s);
-    return `<button class="item" data-n="${s.n}" aria-current="${s === SEL}">
+    return `<button class="item" data-k="s" data-n="${s.n}" aria-current="${s === SEL}">
       <span class="nm">${s.n}</span>
       <span class="sc">${c == null ? '—' : pct(c)}</span>
       <span class="meta"><span class="pill z">Z${s.z}</span>
@@ -358,9 +444,35 @@ function draw(){
         <span>${s.L.length} 线</span>
         ${s.prem ? '<span class="pill w">Waitrose/M&amp;S</span>' : ''}</span>
     </button>`;
-  }).join('') || '<div style="padding:18px 14px;color:var(--muted)">没有车站符合当前条件。放宽价格或治安上限。</div>';
+  }).join('') || empty();
+  bindList();
+}
+function drawSchemes(keep){
+  const sorted = keep.slice().sort((a,b) => (composite(b) ?? -1) - (composite(a) ?? -1));
+  $('#count').textContent = `${sorted.length} 个楼盘符合条件 · 共 ${SC.length} 个 Zone 1–4 新盘`;
+  $('#list').innerHTML = sorted.slice(0, 150).map(x => {
+    const c = composite(x);
+    return `<button class="item" data-k="c" data-n="${x.i}">
+      <span class="nm">${x.s}</span>
+      <span class="sc">${c == null ? '—' : pct(c)}</span>
+      <span class="meta"><span class="pill z">Z${x.z}</span>
+        <span>${fmtK(x.price)}</span>
+        <span>犯罪 ${x.home == null ? '—' : x.home.toFixed(0)}</span>
+        <span>${x.st} ${x.d}m</span>
+        <span>${x.f.slice(0,4)} 交付</span>
+        ${x.has ? '<span class="pill w">有在售</span>' : ''}</span>
+    </button>`;
+  }).join('') || empty();
+  bindList();
+}
+function empty(){
+  return '<div style="padding:18px 14px;color:var(--muted)">没有符合当前条件的结果。放宽价格或治安上限。</div>';
+}
+function bindList(){
   for (const el of $('#list').querySelectorAll('.item'))
-    el.onclick = () => select(S.find(x => x.n === el.dataset.n));
+    el.onclick = () => el.dataset.k === 's'
+      ? select(S.find(x => x.n === el.dataset.n))
+      : selectScheme(SC[+el.dataset.n]);
 }
 
 function bar(label, v){
@@ -432,6 +544,56 @@ function selectGroup(g){
   draw();
 }
 
+function selectScheme(x){
+  if (!x) return;
+  SEL = null;
+  MAP.easeTo({center:[x.x, x.y], zoom:Math.max(MAP.getZoom(), 15), duration:600});
+  MAP.getSource('ring').setData(ringFC({x:x.x, y:x.y}));
+  MAP.getSource('amen').setData(amenFC({x:x.x, y:x.y}));
+  const d = $('#detail');
+  d.hidden = false;
+  $('#app').classList.add('with-detail');
+  requestAnimationFrame(() => MAP.resize());
+  d.scrollTop = 0;
+  const warn = [];
+  if (x.pre) warn.push('这条街在楼盘开卖前就有公寓成交，二手数字是混的，已隐去。');
+  if (x.ps >= 15) warn.push(`该街 ${x.ps}% 的成交价低于自身上四分位的一半，多半是共享产权份额价，已从中位数里剔除。`);
+  d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
+    <h2>${x.s}</h2>
+    <div class="where">${x.sec} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}</div>
+    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar('方便', x.conv)}</div>
+    <div class="sect">成交 · Land Registry</div>
+    <dl class="kv">
+      <dt>首批新房</dt><dd>${x.f}</dd>
+      <dt>新房成交</dt><dd>${x.nn} 笔${x.nm ? ' · 中位 £' + x.nm.toLocaleString() : ''}</dd>
+      <dt>二手回流</dt><dd>${x.nr} 笔${x.l ? ' · 最近 ' + x.l : ''}</dd>
+      <dt>二手中位</dt><dd>${x.rm ? '£' + x.rm.toLocaleString() : '<span class="na">不足或已隐去</span>'}</dd>
+      <dt>二手下四分位</dt><dd>${x.r25 ? '£' + x.r25.toLocaleString() : '<span class="na">—</span>'}</dd>
+      <dt>每平尺</dt><dd>${x.psf ? '£' + x.psf : '<span class="na">无 EPC 面积</span>'}</dd>
+      <dt>新房→二手</dt><dd>${x.gap == null ? '<span class="na">样本不足</span>' : x.gap + '%'}</dd>
+    </dl>
+    <div class="sect">周边 · 步行 800 米</div>
+    <dl class="kv">
+      <dt>居家类犯罪 / 千人</dt><dd>${x.home == null ? '—' : x.home.toFixed(0)}<span class="na"> · 伦敦 56</span></dd>
+      <dt>商店</dt><dd>${x.shop}</dd>
+      <dt>咖啡馆餐厅酒吧</dt><dd>${x.food}</dd>
+      <dt>公园</dt><dd>${x.park}</dd>
+      <dt>Waitrose / M&amp;S</dt><dd>${x.prem ? '有' : '<span class="na">无</span>'}</dd>
+    </dl>
+    ${warn.map(w => `<p class="caveat">⚠ ${w}</p>`).join('')}
+    <p class="caveat">楼盘 = 一条街 × 一个邮编段，这是 Price Paid 能给的最细粒度。二手 = 该街首批新房开卖之后的非新房成交。
+      这里只有已登记成交，没有挂牌价——挂牌那半边要手工收集，见「在售房源」。</p>`;
+  d.querySelector('.close').onclick = () => {
+    d.hidden = true;
+    $('#app').classList.remove('with-detail');
+    MAP.getSource('ring').setData(ringFC(null));
+    MAP.getSource('amen').setData(amenFC(null));
+    requestAnimationFrame(() => MAP.resize());
+    draw();
+  };
+  draw();
+}
+
 function select(s){
   if (!s) return;
   SEL = s;
@@ -485,23 +647,30 @@ function select(s){
 
 /* ---------- wiring ---------- */
 function drawLegend(){
-  if (metric === 'none'){ $('#ramp').innerHTML = ''; $('#rampLo').textContent = '';
-                          $('#rampHi').textContent = ''; return; }
+  const m = METRIC[metric];
+  $('#legendTitle').textContent = m ? m.t : '只看底图';
+  $('#legendNote').textContent = m ? m.n : '';
+  if (!m){ $('#ramp').innerHTML = ''; $('#rampLo').textContent = '';
+           $('#rampHi').textContent = ''; return; }
   const br = BREAKS[metric];
   $('#ramp').innerHTML = RAMP.map(c => `<i style="background:${c}"></i>`).join('');
-  $('#rampLo').textContent = '0';
-  $('#rampHi').textContent = Math.round(br[br.length-1]) + '+';
+  $('#rampLo').textContent = m.f(0);
+  $('#rampHi').textContent = m.f(br[br.length-1]) + '+';
 }
 function wire(){
   $('#metric').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     metric = b.dataset.m;
     for (const x of $('#metric').children) x.setAttribute('aria-pressed', x === b);
-    $('#legendTitle').textContent = metric === 'h' ? '居家类犯罪 / 千人 · 36 个月'
-      : metric === 'r' ? '全口径犯罪 / 千人 · 36 个月' : '只看底图';
     drawLegend();
     MAP.setPaintProperty('lsoa-fill', 'fill-color', fillColor(metric));
-    MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : 0.6);
+    MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : state.op);
+  };
+  $('#mode').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    mode = b.dataset.k;
+    for (const x of $('#mode').children) x.setAttribute('aria-pressed', x === b);
+    draw();
   };
   $('#zones').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -513,14 +682,27 @@ function wire(){
   const sync = () => {
     state.price = +$('#price').value; state.crime = +$('#crime').value;
     state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
-    state.listings = $('#lst').checked;
-    if (ready) MAP.getSource('listings').setData(listingFC());
+    state.resale = $('#resale').checked;
+    state.op = +$('#op').value / 100;
+    state.layers = {stn:$('#lyStn').checked, prem:$('#lyPrem').checked,
+                    mkt:$('#lyMkt').checked, sch:$('#lySch').checked,
+                    lst:$('#lyLst').checked};
     state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
     $('#priceV').textContent = '≤ £' + state.price + 'k';
     $('#crimeV').textContent = state.crime >= 200 ? '不限' : '≤ ' + state.crime;
+    $('#opV').textContent = Math.round(state.op * 100) + '%';
+    if (ready){
+      MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : state.op);
+      for (const [id, on] of [['grocer-dot', state.layers.prem], ['grocer-label', state.layers.prem],
+                              ['market-dot', state.layers.mkt],
+                              ['stations-label', state.layers.stn]])
+        MAP.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+    }
     draw();
   };
-  for (const id of ['price','crime','prem','multi','lst','wSafe','wCheap','wConv'])
+  for (const id of ['price','crime','prem','multi','resale','op',
+                    'lyStn','lyPrem','lyMkt','lySch','lyLst',
+                    'wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', sync);
   sync();
 }
@@ -545,12 +727,14 @@ function styleFor(buffer){
   proto.add(new pmtiles.PMTiles(new BufferSource('london', buffer)));
   // The glyph URL puts the font stack in the path, so the stacks are renamed to
   // something that needs no escaping.
-  // Grayscale, not the light flavour: the basemap is reference and the data is
-  // the colour. On the coloured flavour the green of a park and the blue of a
-  // high-crime LSOA compete, and neither reads.
+  // The white flavour: a near-white ground with grey roads and coloured POI
+  // marks, so the streets, the stations and the shops are the map and the data
+  // is a wash over it. On the fully coloured flavour the green of a park and the
+  // blue of a high-crime LSOA compete and neither reads.
   const layers = JSON.parse(JSON.stringify(basemaps.layers('protomaps',
-      basemaps.namedFlavor('grayscale'), {lang:'en'}))
-    .replace(/"Noto Sans (Regular|Medium|Italic)"/g, '"NotoSans$1"'));
+      basemaps.namedFlavor('white'), {lang:'en'}))
+    .replace(/"Noto Sans (Regular|Medium|Italic)"/g, '"NotoSans$1"')
+    .replace(/"Noto Sans [^"]*"/g, '"NotoSansRegular"'));
   return {
     version: 8,
     glyphs: 'data/fonts/{fontstack}/{range}.wasm',
@@ -570,20 +754,29 @@ async function boot(){
   const opt = {cache:'no-cache'};
   const j = p => fetch(p, opt).then(r => r.json());
   note('底图 14.7 MB…');
-  const [buffer, lsoa, bor, stations, amen, breaks, short] = await Promise.all([
+  const [buffer, lsoa, bor, stations, amen, breaks, schemes, short] = await Promise.all([
     fetch('data/london.pmtiles.wasm', opt).then(r => r.arrayBuffer()),
     j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
     j('data/amenities.json'), j('data/breaks.json'),
+    j('data/schemes.json').catch(() => []),
     j('data/shortlist.json').catch(() => null)]);
   S = stations; AM = amen; BREAKS = breaks; SHORT = short;
+  SC = schemes; SC.forEach((x, i) => x.i = i);
   LGROUPS = SHORT ? groupListings(SHORT.listings) : [];
-  score();
+  score(); scoreSchemes();
   note('绘制…');
 
   MAP = new maplibregl.Map({
     container:'map', style:styleFor(buffer), center:[-0.09, 51.505], zoom:10.6,
     minZoom:9, maxZoom:17, attributionControl:{compact:true},
     maxBounds:[[-0.46, 51.31], [0.20, 51.70]]});
+  MAP.on('error', e => {
+    const msg = (e && e.error && e.error.message) || String(e);
+    console.warn('map error:', msg);
+    const el = $('#loading');
+    if (el && !ready) el.innerHTML = '地图没能加载。<br><span style="font-size:11.5px">'
+      + msg.replace(/</g, '&lt;') + '</span>';
+  });
   MAP.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-left');
   MAP.addControl(new maplibregl.ScaleControl({maxWidth:90, unit:'metric'}), 'bottom-right');
 
@@ -594,9 +787,9 @@ async function boot(){
 
     MAP.addSource('lsoa', {type:'geojson', data:lsoa});
     MAP.addLayer({id:'lsoa-fill', type:'fill', source:'lsoa',
-      paint:{'fill-color':fillColor('h'), 'fill-opacity':0.6}}, firstRoad);
+      paint:{'fill-color':fillColor('h'), 'fill-opacity':state.op}}, firstRoad);
     MAP.addLayer({id:'lsoa-line', type:'line', source:'lsoa',
-      paint:{'line-color':'#ffffff', 'line-width':0.3, 'line-opacity':0.25}}, firstRoad);
+      paint:{'line-color':'#ffffff', 'line-width':0.3, 'line-opacity':0.35}}, firstRoad);
 
     MAP.addSource('bor', {type:'geojson', data:bor});
     MAP.addLayer({id:'bor-line', type:'line', source:'bor',
@@ -633,6 +826,32 @@ async function boot(){
               'text-offset':[0, 1.1], 'text-anchor':'top', 'text-allow-overlap':false},
       paint:{'text-color':'#16202b', 'text-halo-color':'#ffffff', 'text-halo-width':1.6}});
 
+    // Waitrose and M&S are on the map because a retailer's own catchment model
+    // put them there -- a second opinion on the area, formed independently.
+    MAP.addSource('grocers', {type:'geojson', data:shopFC('prem')});
+    MAP.addLayer({id:'grocer-dot', type:'circle', source:'grocers',
+      paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6],
+             'circle-color':'#2c6f52', 'circle-stroke-color':'#ffffff',
+             'circle-stroke-width':1.2}});
+    MAP.addLayer({id:'grocer-label', type:'symbol', source:'grocers', minzoom:12.5,
+      layout:{'text-field':['get','name'], 'text-font':['NotoSansMedium'], 'text-size':10.5,
+              'text-offset':[0, 1], 'text-anchor':'top'},
+      paint:{'text-color':'#1f5a41', 'text-halo-color':'#ffffff', 'text-halo-width':1.4}});
+
+    MAP.addSource('markets', {type:'geojson', data:shopFC('mkt')});
+    MAP.addLayer({id:'market-dot', type:'circle', source:'markets', minzoom:13,
+      layout:{visibility:'none'},
+      paint:{'circle-radius':3.2, 'circle-color':'#6a8f7c', 'circle-stroke-color':'#ffffff',
+             'circle-stroke-width':0.8, 'circle-opacity':0.9}});
+
+    MAP.addSource('schemes', {type:'geojson', data:schemeFC(SC.filter(passesScheme))});
+    MAP.addLayer({id:'scheme-dot', type:'circle', source:'schemes', minzoom:11,
+      paint:{'circle-radius':['interpolate', ['linear'], ['zoom'],
+               11, 2.6, 14, ['+', 4, ['*', 3, ['get','c']]], 16, 9],
+             'circle-color':['case', ['==', ['get','has'], 1], '#c2402a', '#ffffff'],
+             'circle-stroke-color':['case', ['==', ['get','has'], 1], '#ffffff', '#3d5a74'],
+             'circle-stroke-width':1.6, 'circle-opacity':0.95}});
+
     MAP.addSource('listings', {type:'geojson', data:listingFC()});
     MAP.addLayer({id:'listing-dot', type:'circle', source:'listings',
       paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 9, 5, 13, 9, 16, 12],
@@ -646,6 +865,11 @@ async function boot(){
 
     MAP.on('click', 'stations-dot', e => select(S.find(s => s.n === e.features[0].properties.n)));
     MAP.on('click', 'listing-dot', e => selectGroup(LGROUPS[e.features[0].properties.i]));
+    MAP.on('click', 'scheme-dot', e => selectScheme(SC[e.features[0].properties.i]));
+    for (const id of ['scheme-dot', 'grocer-dot', 'market-dot']){
+      MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
+      MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
+    }
     for (const id of ['listing-dot', 'listing-count']){
       MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
       MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
@@ -661,7 +885,7 @@ async function boot(){
 
     ready = true;
     drawLegend(); wire();
-    $('#stamp').textContent = `${S.length} 站 · 4,994 LSOA · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 房源`;
+    $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.
     select(S.find(s => s.n === 'Kidbrooke') || S[0]);
