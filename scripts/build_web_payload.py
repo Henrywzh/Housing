@@ -85,7 +85,9 @@ def main():
     # named, because the name is the signal there and nowhere else.
     pts = {}
     for name, d in load_osm().items():
-        prem = is_premium(d)
+        # Only a shop can be a premium grocer. Five cafes carry "M&S" in their
+        # name and an M&S Cafe is not the signal we are reading off a Waitrose.
+        prem = is_premium(d) if name == "shops" else pd.Series(False, index=d.index)
         rows = [[round(r.lat, 5), round(r.lon, 5), r.kind or ""]
                 + ([r.name] if p else [])
                 for r, p in zip(d.itertuples(), prem)]
