@@ -182,7 +182,9 @@ label.chk input{accent-color:var(--signal)}
       <div class="lbl">地图着色</div>
       <select id="metric" aria-label="地图着色指标">
         <optgroup label="治安 · 按风险对应的分母">
-          <option value="bh" selected>入室盗窃 / 千户 / 年</option>
+          <option value="br" selected>住宅入室（估算）/ 千户 / 年</option>
+          <option value="bh">入室盗窃（含商铺）/ 千户 / 年</option>
+          <option value="rs">入室中住宅占比</option>
           <option value="vc">车辆犯罪 / 千辆车 / 年</option>
           <option value="vi">暴力与抢劫 / 千人 / 年</option>
           <option value="vs">访客型犯罪占比（可信度）</option>
@@ -285,12 +287,16 @@ const $ = s => document.querySelector(s);
 const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
-let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'bh', ready = false;
+let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'br', ready = false;
 let LGROUPS = [], SC = [], mode = 'station';
 
 const METRIC = {
-  bh: {t:'入室盗窃 / 千户 / 年', f:v => v.toFixed(0),
-       n:'分母是住宅数，不是人口——被盗的是房子。伦敦中位 11.9，即一年约 1.2% 的住宅被入室。'},
+  br: {t:'住宅入室（估算）/ 千户 / 年', f:v => v.toFixed(0),
+       n:'把每个 LSOA 的入室按「住宅数」和「实体铺面数」两个暴露面拟合后拆分，只取住宅那部分。伦敦中位 10.1。这是估算值不是分类：住宅数和铺面数相同的两个 LSOA 会得到相同的拆分比例。'},
+  bh: {t:'入室盗窃（含商铺）/ 千户 / 年', f:v => v.toFixed(0),
+       n:'警方原始数据，商铺入室和住宅入室是同一类。分母是住宅数。伦敦中位 11.9。商业区会极高——City of London 001F 是 288。'},
+  rs: {t:'入室中住宅占比 %', f:v => v.toFixed(0) + '%',
+       n:'模型估计有多少比例的入室发生在住宅而非铺面。伦敦中位 92%；City of London 001F 只有 4%。低 = 上一个数基本在讲商铺。'},
   vc: {t:'车辆犯罪 / 千辆车 / 年', f:v => v.toFixed(0),
        n:'分母是该 LSOA 居民拥有的车（Census 2021 拥车分档估算）。中心区居民车少而访客车多，这里会虚高。'},
   vi: {t:'暴力与抢劫 / 千人 / 年', f:v => v.toFixed(0),
@@ -628,7 +634,8 @@ function selectScheme(x){
     </dl>
     <div class="sect">周边 · 步行 800 米</div>
     <dl class="kv">
-      <dt>入室盗窃 / 千户 / 年</dt><dd>${x.bh == null ? '—' : x.bh.toFixed(0)}<span class="na"> · 伦敦 12</span></dd>
+      <dt>住宅入室（估算）/ 千户 / 年</dt><dd>${x.br == null ? '—' : x.br.toFixed(0)}<span class="na"> · 伦敦 10</span></dd>
+      <dt>入室中住宅占比</dt><dd>${x.rs == null ? '—' : x.rs.toFixed(0) + '%'}<span class="na"> · 伦敦 92%</span></dd>
       <dt>车辆犯罪 / 千车 / 年</dt><dd>${x.vc == null ? '—' : x.vc.toFixed(0)}<span class="na"> · 伦敦 30</span></dd>
       <dt>访客型犯罪占比</dt><dd>${x.vs == null ? '—' : x.vs.toFixed(0) + '%'}<span class="na"> · 伦敦 4%</span></dd>
       <dt>商店</dt><dd>${x.shop}</dd>
@@ -675,7 +682,8 @@ function select(s){
     </dl>
     <div class="sect">治安 · 警方 36 个月</div>
     <dl class="kv">
-      <dt>入室盗窃 / 千户 / 年</dt><dd>${s.bh == null ? '—' : s.bh.toFixed(0)}<span class="na"> · 伦敦 12</span></dd>
+      <dt>住宅入室（估算）/ 千户 / 年</dt><dd>${s.br == null ? '—' : s.br.toFixed(0)}<span class="na"> · 伦敦 10</span></dd>
+      <dt>含商铺的原始数</dt><dd>${s.bh == null ? '—' : s.bh.toFixed(0)}<span class="na"> · 伦敦 12</span></dd>
       <dt>车辆犯罪 / 千车 / 年</dt><dd>${s.vc == null ? '—' : s.vc.toFixed(0)}<span class="na"> · 伦敦 30</span></dd>
       <dt>访客型犯罪占比</dt><dd>${s.vs == null ? '—' : s.vs.toFixed(0) + '%'}<span class="na"> · 伦敦 4%</span></dd>
       <dt>全口径 / 千人</dt><dd>${s.res == null ? '—' : s.res.toFixed(0)}<span class="na"> · 伦敦 253</span></dd>
@@ -694,7 +702,8 @@ function select(s){
     ${sl ? devBlock(sl[0], sl[1]) : ''}
     <p class="caveat">治安按车站 800 米内的实际暴露面算：入室盗窃除以住宅数，车辆犯罪除以居民拥有的车，不是除以人口。
       人口分母会让住得少、人流大的地方（Soho 每千居民 16,987 起）看起来极危险，而那些案子几乎与住户无关。
-      剩下修不掉的是警方把商铺入室和住宅入室记成同一类，所以「访客型犯罪占比」用来判断上面的数该打多少折。</p>`;
+      警方把商铺入室和住宅入室记成同一类，所以「住宅入室」是按住宅数与实体铺面数两个暴露面拟合后拆出来的<b>估算值</b>——
+      Bank 站原始每千户 156 起，拆完住宅部分只有 10 起。估算的代价是同构的两个地方会得到同样的拆分，不管实际发生了什么。</p>`;
   d.querySelector('.close').onclick = () => {
     d.hidden = true; SEL = null;
     $('#app').classList.remove('with-detail');
@@ -850,7 +859,7 @@ async function boot(){
 
     MAP.addSource('lsoa', {type:'geojson', data:lsoa});
     MAP.addLayer({id:'lsoa-fill', type:'fill', source:'lsoa',
-      paint:{'fill-color':fillColor('bh'), 'fill-opacity':state.op}}, firstRoad);
+      paint:{'fill-color':fillColor('br'), 'fill-opacity':state.op}}, firstRoad);
     MAP.addLayer({id:'lsoa-line', type:'line', source:'lsoa',
       paint:{'line-color':'#ffffff', 'line-width':0.3, 'line-opacity':0.35}}, firstRoad);
 

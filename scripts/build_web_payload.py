@@ -43,6 +43,7 @@ def main():
             "psf": num(r.psf), "sqft": num(r.sqft), "npsf": int(r.n_psf),
             "new": int(r.n_new),
             "home": num(r.home_per_1000, 1), "bh": num(r.burglary_per_1000_hh, 1),
+            "br": num(r.burglary_resid_per_1000_hh, 1), "rs": num(r.residential_share),
             "vc": num(r.vehicle_per_1000_cars, 1), "vs": num(r.visitor_share, 1), "res": num(r.resident_per_1000, 1),
             "pop": int(r.population),
             "shop": num(getattr(r, "n_shops", None)), "smkt": num(getattr(r, "n_supermarket", None)),
@@ -59,12 +60,14 @@ def main():
     # travel inside the geometry rather than in a second file joined at runtime.
     met = pd.read_csv(PROC / "lsoa_metrics.csv").set_index("lsoa")
     soc = pd.read_csv(PROC / "lsoa_social.csv").set_index("lsoa")
-    met = met.join(soc[["burglary_per_1000_hh", "vehicle_per_1000_cars",
+    met = met.join(soc[["burglary_per_1000_hh", "burglary_resid_per_1000_hh",
+                        "residential_share", "vehicle_per_1000_cars",
                         "violence_per_1000", "visitor_share", "density",
                         "degree_pct", "age_25_39_pct", "owned_pct",
                         "private_rent_pct"]])
     geo = json.loads((PROC / "lsoa_london.geojson").read_text())
     KEYS = {"h": ("home_per_1000", 1), "r": ("resident_per_1000", 0),
+            "br": ("burglary_resid_per_1000_hh", 1), "rs": ("residential_share", 0),
             "bh": ("burglary_per_1000_hh", 1), "vc": ("vehicle_per_1000_cars", 1),
             "vi": ("violence_per_1000", 1), "vs": ("visitor_share", 1),
             "de": ("density", 0), "dg": ("degree_pct", 1), "ag": ("age_25_39_pct", 1),
@@ -96,6 +99,9 @@ def main():
     # breaks put six of the seven bands at zero and the map goes flat. Fixed
     # bands instead, at shares a reader can name.
     breaks["nb"] = [1, 5, 10, 20, 35, 55]
+    # Most LSOAs are wholly residential, so the top quantiles all land on 100 and
+    # the interesting end -- the mixed and commercial ones -- gets one band.
+    breaks["rs"] = [50, 70, 85, 92, 97, 99.5]
     (WEB / "breaks.json").write_text(json.dumps(breaks))
     print("breaks:", breaks)
 
@@ -164,6 +170,7 @@ def main():
             "psf": num(r.psf), "gap": num(r.gap_pct, 1),
             "ps": num(r.part_share_pct, 1), "pre": bool(r.pre_existing_stock),
             "home": num(r.home_per_1000, 1), "bh": num(r.burglary_per_1000_hh, 1),
+            "br": num(r.burglary_resid_per_1000_hh, 1), "rs": num(r.residential_share),
             "vc": num(r.vehicle_per_1000_cars, 1), "vs": num(r.visitor_share, 1),
             "shop": int(r.n_shops), "food": int(r.n_food), "park": int(r.n_parks),
             "prem": bool(r.premium_grocer),

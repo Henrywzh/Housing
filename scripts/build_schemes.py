@@ -144,6 +144,7 @@ def main():
 
     soc = pd.read_csv(OUT / "lsoa_social.csv")
     g = g.merge(soc[["lsoa", "home_per_1000", "resident_per_1000", "burglary_per_1000_hh",
+                     "burglary_resid_per_1000_hh", "residential_share",
                      "vehicle_per_1000_cars", "visitor_share"]], on="lsoa", how="left")
 
     amen = {k: (v, xy(v["lat"], v["lon"])) for k, v in load_osm().items()}

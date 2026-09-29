@@ -18,16 +18,38 @@ What is burgled is a dwelling. What is broken into is a car. So:
                                              high where crowds are, and says so)
 
 A place with few homes and heavy footfall no longer looks dangerous to live in
-merely for having few homes. What it cannot fix is that a burgled shop and a
-burgled flat are the same category to the police, so a retail core still carries
-some of it -- hence `visitor_share`, the fraction of an LSOA's crime that is
-shoplifting or theft from the person. That is computed from the crime data
-itself, needs no other source, and is the cleanest available answer to "is this
-number about residents or about crowds".
+merely for having few homes. What remains is that a burgled shop and a burgled
+flat are the same category to the police, so a retail core still carries some of
+it. Two things address that.
+
+`visitor_share` is the fraction of an LSOA's crime that is shoplifting or theft
+from the person. It needs no other source and answers "is this number about
+residents or about crowds" directly.
+
+The split itself is estimated. Burglary counts regress on two exposures --
+households and commercial premises -- across all of London, and each LSOA's
+observed burglaries are then apportioned by the fitted shares. This is an
+estimate, not a classification: two LSOAs with the same households and the same
+premises get the same split whatever actually happened in them. What makes it
+worth trusting as far as it goes is that the fitted household coefficient
+reproduces the directly observed London median (11.2 against 11.9 per 1,000
+households a year) without being told it.
+
+Premises are counted from OpenStreetMap shops and food outlets, not from the
+business register: UK Business Counts is a register of company addresses, and
+in the City of London it lists 27,425 local units against 564 physical premises,
+because a registered address is not a door that can be forced. Workplace
+population was tested as an alternative exposure and is the weaker of the two
+(R2 0.50 against 0.63); adding it on top of premises moves R2 by 0.013 while
+costing a 2011 geography and a 7% coverage gap, so it is not used.
 """
-import json, pathlib
+import json, pathlib, sys
 import numpy as np
 import pandas as pd
+from scipy.optimize import nnls
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from osm_layers import load as load_osm  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, OUT = ROOT / "data" / "raw", ROOT / "data" / "processed"
@@ -62,6 +84,26 @@ def areas_km2(path):
         out[f["properties"]["LSOA21CD"]] = transform(
             lambda x, y, z=None: (x * k, y * M_PER_DEG_LAT), geom).area / 1e6
     return pd.Series(out, name="area_km2")
+
+
+def premises_per_lsoa(path):
+    """Shops and food outlets inside each LSOA -- premises with a door on a street."""
+    from shapely.geometry import shape, Point
+    from shapely.strtree import STRtree
+    g = json.loads(path.read_text())
+    polys = [shape(f["geometry"]) for f in g["features"]]
+    codes = [f["properties"]["LSOA21CD"] for f in g["features"]]
+    tree = STRtree(polys)
+    cnt = np.zeros(len(polys), dtype=int)
+    osm = load_osm()
+    for name in ("shops", "food"):
+        for r in osm[name].itertuples():
+            p = Point(r.lon, r.lat)
+            for i in tree.query(p):
+                if polys[i].contains(p):
+                    cnt[i] += 1
+                    break
+    return pd.Series(cnt, index=codes, name="premises")
 
 
 def main():
@@ -106,6 +148,28 @@ def main():
     d["visitor_share"] = ((d["cat_shoplifting"] + d["cat_theft_from_the_person"])
                           / d["crimes"].replace(0, np.nan) * 100)
 
+    # --- estimated residential share of burglary --------------------------------
+    d = d.join(premises_per_lsoa(RAW / "lsoa_london_bgc.geojson"))
+    fit = d[d["households"].notna() & ~d["no_snap_point"]]
+    X = fit[["households", "premises"]].values.astype(float)
+    coef, _ = nnls(X, fit["cat_burglary"].values)
+    pred = X @ coef
+    r2 = 1 - ((fit["cat_burglary"] - pred) ** 2).sum() / (
+        (fit["cat_burglary"] - fit["cat_burglary"].mean()) ** 2).sum()
+    res_exp = coef[0] * d["households"]
+    com_exp = coef[1] * d["premises"]
+    share = res_exp / (res_exp + com_exp).replace(0, np.nan)
+    d["residential_share"] = share * 100
+    # The count as well as the rate: a catchment's rate is its own estimated
+    # residential burglaries over its own households, not the mean of LSOA rates.
+    d["n_burg_resid"] = d["cat_burglary"] * share
+    d["burglary_resid_per_1000_hh"] = d["n_burg_resid"] / d["households"] * 1000 * yr
+    d.loc[d["households"] < 100, ["burglary_resid_per_1000_hh", "residential_share"]] = np.nan
+    d.loc[d["no_snap_point"], ["burglary_resid_per_1000_hh", "residential_share"]] = np.nan
+    print(f"\nburglary ~ {coef[0]:.4f}*households + {coef[1]:.4f}*premises   R2={r2:.3f}"
+          f"   -> {coef[0]/3*1000:.1f} per 1,000 households a year, against an observed "
+          f"median of {d['burglary_per_1000_hh'].median():.1f}")
+
     d.reset_index().to_csv(OUT / "lsoa_social.csv", index=False)
 
     print(f"{len(d):,} LSOAs")
@@ -113,14 +177,16 @@ def main():
                    ("age_25_39_pct", "25-39岁%"), ("owned_pct", "自有%"),
                    ("private_rent_pct", "私租%"), ("burglary_per_1000_hh", "入室/千户/年"),
                    ("vehicle_per_1000_cars", "车辆/千车/年"),
-                   ("violence_per_1000", "暴力抢劫/千人/年"), ("visitor_share", "访客型犯罪%")):
+                   ("violence_per_1000", "暴力抢劫/千人/年"), ("visitor_share", "访客型犯罪%"),
+                   ("burglary_resid_per_1000_hh", "住宅入室/千户/年"),
+                   ("residential_share", "入室中住宅占比%")):
         s = d[c].dropna()
         print(f"  {lab:16s} p10 {s.quantile(.1):9,.1f}  median {s.median():9,.1f}  "
               f"p90 {s.quantile(.9):9,.1f}")
 
     print("\nwhat the new denominators do to the worst LSOAs on the old measure:")
-    cols = ["LSOA name", "population", "households", "resident_per_1000",
-            "burglary_per_1000_hh", "vehicle_per_1000_cars", "visitor_share"]
+    cols = ["LSOA name", "households", "premises", "burglary_per_1000_hh",
+            "residential_share", "burglary_resid_per_1000_hh", "visitor_share"]
     print(d.nlargest(6, "resident_per_1000")[cols].round(1).to_string(index=False))
     print("\nworst on burglary per household:")
     print(d.nlargest(6, "burglary_per_1000_hh")[cols].round(1).to_string(index=False))

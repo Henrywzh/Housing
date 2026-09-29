@@ -125,7 +125,7 @@ def main():
     saf = pd.read_csv(OUT / "lsoa_safety.csv").merge(centroids(RAW / "lsoa_london_bgc.geojson"),
                                                      on="LSOA code", how="inner")
     soc = pd.read_csv(OUT / "lsoa_social.csv").rename(columns={"lsoa": "LSOA code"})
-    saf = saf.merge(soc[["LSOA code", "households", "cars", "cat_burglary",
+    saf = saf.merge(soc[["LSOA code", "households", "cars", "n_burg_resid", "cat_burglary",
                          "cat_vehicle_crime", "cat_shoplifting",
                          "cat_theft_from_the_person"]].rename(
                              columns={"cat_burglary": "n_burg", "cat_vehicle_crime": "n_veh",
@@ -162,6 +162,9 @@ def main():
                # over its own households, which is not the mean of the LSOA rates.
                "households": int(l["households"].sum()) if len(l) else 0,
                "burglary_per_1000_hh": rate(l["n_burg"], l["households"]),
+               "burglary_resid_per_1000_hh": rate(l["n_burg_resid"], l["households"]),
+               "residential_share": (float(l["n_burg_resid"].sum() / l["n_burg"].sum() * 100)
+                                     if len(l) and l["n_burg"].sum() else np.nan),
                "vehicle_per_1000_cars": rate(l["n_veh"], l["cars"]),
                "visitor_share": (float((l["n_shop"].sum() + l["n_pick"].sum())
                                        / l["crimes"].sum() * 100)
