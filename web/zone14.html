@@ -479,7 +479,7 @@ async function boot(){
   MAP = new maplibregl.Map({
     container:'map', style:styleFor(buffer), center:[-0.09, 51.505], zoom:10.6,
     minZoom:9, maxZoom:17, attributionControl:{compact:true},
-    maxBounds:[[-0.62, 51.22], [0.36, 51.79]]});
+    maxBounds:[[-0.46, 51.31], [0.20, 51.70]]});
   MAP.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-left');
   MAP.addControl(new maplibregl.ScaleControl({maxWidth:90, unit:'metric'}), 'bottom-right');
 
