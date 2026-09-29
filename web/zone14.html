@@ -186,7 +186,7 @@ label.chk input{accent-color:var(--signal)}
         <button data-m="none" aria-pressed="false">只看底图</button>
       </div>
       <div class="row"><span class="lbl">着色浓度</span><span class="v" id="opV">—</span></div>
-      <input type="range" id="op" min="0" max="85" step="5" value="45" aria-label="着色浓度">
+      <input type="range" id="op" min="0" max="85" step="5" value="30" aria-label="着色浓度">
     </div>
 
     <div class="block two">
@@ -276,7 +276,7 @@ const METRIC = {
   t:  {t:'年成交量 / 千居民', n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。', f:v => v.toFixed(1)},
 };
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
-               resale:true, op:0.45,
+               resale:true, op:0.30,
                layers:{line:true, stn:true, prem:true, mkt:false, sch:true, lst:true},
                w:{safe:1, cheap:1, conv:1}};
 
@@ -741,12 +741,12 @@ function styleFor(buffer){
   proto.add(new pmtiles.PMTiles(new BufferSource('london', buffer)));
   // The glyph URL puts the font stack in the path, so the stacks are renamed to
   // something that needs no escaping.
-  // The white flavour: a near-white ground with grey roads and coloured POI
-  // marks, so the streets, the stations and the shops are the map and the data
-  // is a wash over it. On the fully coloured flavour the green of a park and the
-  // blue of a high-crime LSOA compete and neither reads.
+  // Protomaps' 'light' flavour, which is what the original map used. Earlier
+  // versions here tried grayscale and then white to stop the choropleth
+  // competing with the basemap; the answer was to turn the choropleth down, not
+  // to drain the map.
   const layers = JSON.parse(JSON.stringify(basemaps.layers('protomaps',
-      basemaps.namedFlavor('white'), {lang:'en'}))
+      basemaps.namedFlavor('light'), {lang:'en'}))
     .replace(/"Noto Sans (Regular|Medium|Italic)"/g, '"NotoSans$1"')
     .replace(/"Noto Sans [^"]*"/g, '"NotoSansRegular"'));
   return {
@@ -813,17 +813,18 @@ async function boot(){
 
     // Track geometry, not the schematic: TfL's route endpoint returns one point
     // per station, which over a real street map cuts corners through buildings.
+    const firstLabel = (MAP.getStyle().layers.find(l => l.type === 'symbol') || {}).id;
     MAP.addSource('lines', {type:'geojson', data:lines});
     MAP.addLayer({id:'line-casing', type:'line', source:'lines',
       layout:{'line-cap':'round', 'line-join':'round'},
       paint:{'line-color':'#ffffff',
-             'line-width':['interpolate', ['linear'], ['zoom'], 10, 2.4, 14, 5.5, 16, 8],
-             'line-opacity':0.7}});
+             'line-width':['interpolate', ['linear'], ['zoom'], 10, 2.5, 13, 5, 16, 9],
+             'line-opacity':0.8}}, firstLabel);
     MAP.addLayer({id:'line-path', type:'line', source:'lines',
       layout:{'line-cap':'round', 'line-join':'round'},
       paint:{'line-color':['get','color'],
-             'line-width':['interpolate', ['linear'], ['zoom'], 10, 1.2, 14, 3, 16, 4.5],
-             'line-opacity':0.9}});
+             'line-width':['interpolate', ['linear'], ['zoom'], 10, 1.4, 13, 3, 16, 6]}},
+      firstLabel);
 
     MAP.addSource('ring', {type:'geojson', data:ringFC(null)});
     MAP.addLayer({id:'ring-line', type:'line', source:'ring',
@@ -916,11 +917,11 @@ async function boot(){
     ready = true;
     drawLegend(); wire();
     const have = new Set(lines.features.map(f => f.properties.name));
-    const want = ['Elizabeth line', 'Mildmay', 'Suffragette', 'Weaver', 'Windrush'];
+    const want = ['Elizabeth line', 'London Overground', 'DLR', 'Central', 'Victoria'];
     const gone = want.filter(n => !have.has(n));
     $('#lineNote').textContent = gone.length
-      ? `线路层缺 ${gone.join('、')}（OSM 上的标签取不到），其余 ${have.size} 条为实际轨道线形。`
-      : `${have.size} 条线路，实际轨道线形。`;
+      ? `线路层缺 ${gone.join('、')}。`
+      : `${have.size} 条线路，实际轨道线形。Overground 按一条橙线画，不拆六条。`;
     $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.

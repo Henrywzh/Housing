@@ -17,6 +17,7 @@ from osm_layers import load as load_osm, is_premium  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, PROC = ROOT / "data" / "raw", ROOT / "data" / "processed"
+MAN = ROOT / "data" / "manual"
 WEB = ROOT / "web" / "data"
 
 
@@ -107,6 +108,23 @@ def main():
     # Rail lines, simplified to 10m: below a pixel at any zoom this map offers.
     from shapely.geometry import LineString, mapping
     src = json.loads((RAW / "transport" / "lines.geojson").read_text())
+
+    # The Overground's six named lines are dropped in favour of one orange line,
+    # which is how the map this one grew out of drew it and how the network is
+    # still read; Liberty and Lioness were the only two OSM would give up anyway,
+    # so keeping them would have shown two sixths of a network as if it were all
+    # of it.
+    sup = json.loads((MAN / "lines_supplement.json").read_text())
+    src["features"] = [f for f in src["features"]
+                       if f["properties"]["name"] not in ("Liberty", "Lioness")]
+    for name, parts in sup["lines"].items():
+        src["features"].append({
+            "type": "Feature",
+            "properties": {"name": name, "mode": "rail",
+                           "color": sup["_colors"][name], "z": 0},
+            "geometry": {"type": "MultiLineString",
+                         "coordinates": [[[lon, lat] for lat, lon in seg]
+                                         for seg in parts if len(seg) > 1]}})
     tol = 10 / 111_320.0
     for f in src["features"]:
         out = []
