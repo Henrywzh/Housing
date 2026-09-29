@@ -104,6 +104,21 @@ def main():
     (WEB / "amenities.json").write_text(json.dumps(pts, separators=(",", ":")))
     print(f"amenities.json: {(WEB / 'amenities.json').stat().st_size/1e6:.1f} MB")
 
+    # Rail lines, simplified to 10m: below a pixel at any zoom this map offers.
+    from shapely.geometry import LineString, mapping
+    src = json.loads((RAW / "transport" / "lines.geojson").read_text())
+    tol = 10 / 111_320.0
+    for f in src["features"]:
+        out = []
+        for c in f["geometry"]["coordinates"]:
+            g = LineString(c).simplify(tol, preserve_topology=False)
+            if len(g.coords) > 1:
+                out.append([[round(x, 5), round(y, 5)] for x, y in g.coords])
+        f["geometry"]["coordinates"] = out
+    (WEB / "lines.geojson").write_text(json.dumps(src, separators=(",", ":")))
+    print(f"{len(src['features'])} rail lines -> lines.geojson "
+          f"({(WEB / 'lines.geojson').stat().st_size/1e3:.0f} KB)")
+
     sc = pd.read_csv(PROC / "schemes.csv")
     lst_streets = set()
     slp = PROC / "shortlist.json"

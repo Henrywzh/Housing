@@ -191,6 +191,7 @@ label.chk input{accent-color:var(--signal)}
 
     <div class="block two">
       <div class="lbl">地图上显示</div>
+      <label class="chk"><input type="checkbox" id="lyLine" checked> 地铁线路</label>
       <label class="chk"><input type="checkbox" id="lyStn" checked> 车站</label>
       <label class="chk"><input type="checkbox" id="lyPrem" checked> Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="lyMkt"> 所有超市（放大后）</label>
@@ -243,6 +244,7 @@ label.chk input{accent-color:var(--signal)}
       <div class="ramp" id="ramp"></div>
       <div class="ends"><span id="rampLo">—</span><span id="rampHi">—</span></div>
       <div class="note" id="legendNote">深 = 高。分档按全伦敦分位数。灰 = 无数据。</div>
+      <div class="note" id="lineNote"></div>
     </div>
   </div>
   <div id="detail" hidden></div>
@@ -275,7 +277,7 @@ const METRIC = {
 };
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
                resale:true, op:0.45,
-               layers:{stn:true, prem:true, mkt:false, sch:true, lst:true},
+               layers:{line:true, stn:true, prem:true, mkt:false, sch:true, lst:true},
                w:{safe:1, cheap:1, conv:1}};
 
 /* ---------- scoring ---------- */
@@ -409,13 +411,23 @@ function schemeFC(list){
     type:'Feature', geometry:{type:'Point', coordinates:[x.x, x.y]},
     properties:{i:x.i, c:composite(x) ?? 0, has:x.has ? 1 : 0}}))};
 }
+// "M&S Simply Food", "M&S Foodhall", "Little Waitrose" -- the fascia varies and
+// the distinction is not one a buyer is reading. Central London draws the same
+// three words a dozen times over otherwise.
+function grocerName(n){
+  const t = (n || '').toLowerCase();
+  if (t.includes('waitrose')) return 'Waitrose';
+  if (t.includes('whole foods')) return 'Whole Foods';
+  if (t.includes('m&s') || t.includes('marks')) return 'M&S';
+  return n || '超市';
+}
 function shopFC(kinds){
   const out = [];
   for (const p of (AM.shops || [])){
     const prem = p.length > 3;
     if (kinds === 'prem' ? !prem : !(p[2] === 'supermarket' && !prem)) continue;
     out.push({type:'Feature', geometry:{type:'Point', coordinates:[p[1], p[0]]},
-              properties:{name:(prem ? p[3] : '') || '超市'}});
+              properties:{name:prem ? grocerName(p[3]) : '超市'}});
   }
   return {type:'FeatureCollection', features:out};
 }
@@ -684,7 +696,8 @@ function wire(){
     state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
     state.resale = $('#resale').checked;
     state.op = +$('#op').value / 100;
-    state.layers = {stn:$('#lyStn').checked, prem:$('#lyPrem').checked,
+    state.layers = {line:$('#lyLine').checked, stn:$('#lyStn').checked,
+                    prem:$('#lyPrem').checked,
                     mkt:$('#lyMkt').checked, sch:$('#lySch').checked,
                     lst:$('#lyLst').checked};
     state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
@@ -693,7 +706,8 @@ function wire(){
     $('#opV').textContent = Math.round(state.op * 100) + '%';
     if (ready){
       MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : state.op);
-      for (const [id, on] of [['grocer-dot', state.layers.prem], ['grocer-label', state.layers.prem],
+      for (const [id, on] of [['line-path', state.layers.line], ['line-casing', state.layers.line],
+                              ['grocer-dot', state.layers.prem], ['grocer-label', state.layers.prem],
                               ['market-dot', state.layers.mkt],
                               ['stations-label', state.layers.stn]])
         MAP.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
@@ -701,7 +715,7 @@ function wire(){
     draw();
   };
   for (const id of ['price','crime','prem','multi','resale','op',
-                    'lyStn','lyPrem','lyMkt','lySch','lyLst',
+                    'lyLine','lyStn','lyPrem','lyMkt','lySch','lyLst',
                     'wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', sync);
   sync();
@@ -754,12 +768,14 @@ async function boot(){
   const opt = {cache:'no-cache'};
   const j = p => fetch(p, opt).then(r => r.json());
   note('底图 14.7 MB…');
-  const [buffer, lsoa, bor, stations, amen, breaks, schemes, short] = await Promise.all([
-    fetch('data/london.pmtiles.wasm', opt).then(r => r.arrayBuffer()),
-    j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
-    j('data/amenities.json'), j('data/breaks.json'),
-    j('data/schemes.json').catch(() => []),
-    j('data/shortlist.json').catch(() => null)]);
+  const [buffer, lsoa, bor, stations, amen, breaks, schemes, lines, short] =
+    await Promise.all([
+      fetch('data/london.pmtiles.wasm', opt).then(r => r.arrayBuffer()),
+      j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
+      j('data/amenities.json'), j('data/breaks.json'),
+      j('data/schemes.json').catch(() => []),
+      j('data/lines.geojson').catch(() => ({type:'FeatureCollection', features:[]})),
+      j('data/shortlist.json').catch(() => null)]);
   S = stations; AM = amen; BREAKS = breaks; SHORT = short;
   SC = schemes; SC.forEach((x, i) => x.i = i);
   LGROUPS = SHORT ? groupListings(SHORT.listings) : [];
@@ -794,6 +810,20 @@ async function boot(){
     MAP.addSource('bor', {type:'geojson', data:bor});
     MAP.addLayer({id:'bor-line', type:'line', source:'bor',
       paint:{'line-color':'#5b6b78', 'line-width':1.1, 'line-opacity':0.75}});
+
+    // Track geometry, not the schematic: TfL's route endpoint returns one point
+    // per station, which over a real street map cuts corners through buildings.
+    MAP.addSource('lines', {type:'geojson', data:lines});
+    MAP.addLayer({id:'line-casing', type:'line', source:'lines',
+      layout:{'line-cap':'round', 'line-join':'round'},
+      paint:{'line-color':'#ffffff',
+             'line-width':['interpolate', ['linear'], ['zoom'], 10, 2.4, 14, 5.5, 16, 8],
+             'line-opacity':0.7}});
+    MAP.addLayer({id:'line-path', type:'line', source:'lines',
+      layout:{'line-cap':'round', 'line-join':'round'},
+      paint:{'line-color':['get','color'],
+             'line-width':['interpolate', ['linear'], ['zoom'], 10, 1.2, 14, 3, 16, 4.5],
+             'line-opacity':0.9}});
 
     MAP.addSource('ring', {type:'geojson', data:ringFC(null)});
     MAP.addLayer({id:'ring-line', type:'line', source:'ring',
@@ -833,7 +863,7 @@ async function boot(){
       paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6],
              'circle-color':'#2c6f52', 'circle-stroke-color':'#ffffff',
              'circle-stroke-width':1.2}});
-    MAP.addLayer({id:'grocer-label', type:'symbol', source:'grocers', minzoom:12.5,
+    MAP.addLayer({id:'grocer-label', type:'symbol', source:'grocers', minzoom:13,
       layout:{'text-field':['get','name'], 'text-font':['NotoSansMedium'], 'text-size':10.5,
               'text-offset':[0, 1], 'text-anchor':'top'},
       paint:{'text-color':'#1f5a41', 'text-halo-color':'#ffffff', 'text-halo-width':1.4}});
@@ -885,6 +915,12 @@ async function boot(){
 
     ready = true;
     drawLegend(); wire();
+    const have = new Set(lines.features.map(f => f.properties.name));
+    const want = ['Elizabeth line', 'Mildmay', 'Suffragette', 'Weaver', 'Windrush'];
+    const gone = want.filter(n => !have.has(n));
+    $('#lineNote').textContent = gone.length
+      ? `线路层缺 ${gone.join('、')}（OSM 上的标签取不到），其余 ${have.size} 条为实际轨道线形。`
+      : `${have.size} 条线路，实际轨道线形。`;
     $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.
