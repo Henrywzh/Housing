@@ -52,18 +52,33 @@ def main():
     print(f"{len(out)} Zone 1-4 stations -> stations.json "
           f"({(WEB / 'stations.json').stat().st_size/1e3:.0f} KB)")
 
-    # --- LSOA choropleth values (geometry ships separately) -----------------
-    saf = pd.read_csv(PROC / "lsoa_safety.csv")
-    vals = {r._1: [num(r.home_per_1000, 1), num(r.resident_per_1000), int(r.population)]
-            for r in saf.itertuples()}
-    (WEB / "lsoa_values.json").write_text(json.dumps(vals, separators=(",", ":")))
-    print(f"{len(vals)} LSOA value rows -> lsoa_values.json "
-          f"({(WEB / 'lsoa_values.json').stat().st_size/1e3:.0f} KB)")
+    # --- LSOA geometry with its values baked in ----------------------------
+    # MapLibre colours a fill from the feature's own properties, so the numbers
+    # travel inside the geometry rather than in a second file joined at runtime.
+    saf = pd.read_csv(PROC / "lsoa_safety.csv").set_index("LSOA code")
+    geo = json.loads((PROC / "lsoa_london.geojson").read_text())
+    hit = 0
+    for f in geo["features"]:
+        code = f["properties"]["c"]
+        if code in saf.index:
+            r = saf.loc[code]
+            f["properties"]["h"] = num(r["home_per_1000"], 1)
+            f["properties"]["r"] = num(r["resident_per_1000"])
+            hit += 1
+    (WEB / "lsoa.geojson").write_text(json.dumps(geo, separators=(",", ":")))
+    print(f"lsoa.geojson: {hit:,}/{len(geo['features']):,} with values, "
+          f"{(WEB / 'lsoa.geojson').stat().st_size/1e6:.1f} MB")
 
-    for src, dst in (("lsoa_london.geojson", "lsoa.geojson"),
-                     ("borough_outline.geojson", "boroughs.geojson")):
-        (WEB / dst).write_bytes((PROC / src).read_bytes())
-        print(f"{dst}: {(WEB / dst).stat().st_size/1e6:.1f} MB")
+    (WEB / "boroughs.geojson").write_bytes((PROC / "borough_outline.geojson").read_bytes())
+    print(f"boroughs.geojson: {(WEB / 'boroughs.geojson').stat().st_size/1e6:.1f} MB")
+
+    # Break points for the choropleth, computed here so the page does not have to
+    # hold every LSOA value just to work out its own legend.
+    breaks = {k: [round(v, 1) for v in saf[c].quantile(
+        [i / 7 for i in range(1, 7)]).tolist()]
+        for k, c in (("h", "home_per_1000"), ("r", "resident_per_1000"))}
+    (WEB / "breaks.json").write_text(json.dumps(breaks))
+    print("breaks:", breaks)
 
     # --- amenities ----------------------------------------------------------
     # Parks and schools are drawn as one dot each; only the premium grocers are

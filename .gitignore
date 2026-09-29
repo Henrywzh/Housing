@@ -12,3 +12,8 @@ __pycache__/
 # EPC API credential - never commit
 data/raw/epc/.token
 .env
+
+# Generated web payload: rebuilt by scripts/build_web_payload.py and
+# scripts/extract_pmtiles.py. Includes a 14.7MB basemap extract that is
+# reproducible from the cached tiles in data/raw/basemap.
+web/data/
