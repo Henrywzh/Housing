@@ -142,8 +142,9 @@ def main():
     g["zone_min"] = st["zone_min"].values[idx]
     g["station_m"] = np.round(dist).astype(int)
 
-    saf = pd.read_csv(OUT / "lsoa_safety.csv").rename(columns={"LSOA code": "lsoa"})
-    g = g.merge(saf[["lsoa", "home_per_1000", "resident_per_1000"]], on="lsoa", how="left")
+    soc = pd.read_csv(OUT / "lsoa_social.csv")
+    g = g.merge(soc[["lsoa", "home_per_1000", "resident_per_1000", "burglary_per_1000_hh",
+                     "vehicle_per_1000_cars", "visitor_share"]], on="lsoa", how="left")
 
     amen = {k: (v, xy(v["lat"], v["lon"])) for k, v in load_osm().items()}
     for k, (df, axy) in amen.items():

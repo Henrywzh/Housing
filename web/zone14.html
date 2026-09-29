@@ -66,6 +66,9 @@ header .stamp{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transf
   border:1px solid var(--rule);background:var(--panel-2);color:var(--ink-2);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
 .seg button:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
+select{font:inherit;font-size:12.5px;width:100%;background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--rule);border-radius:6px;padding:6px 8px}
+select:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .row .v{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-2);
   font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -177,14 +180,31 @@ label.chk input{accent-color:var(--signal)}
     <div id="controls">
     <div class="block">
       <div class="lbl">地图着色</div>
-      <div class="seg" id="metric" role="group" aria-label="地图着色指标">
-        <button data-m="h" aria-pressed="true">居家类犯罪</button>
-        <button data-m="r" aria-pressed="false">全口径犯罪</button>
-        <button data-m="p" aria-pressed="false">公寓中位价</button>
-        <button data-m="nb" aria-pressed="false">新房占比</button>
-        <button data-m="t" aria-pressed="false">年成交量</button>
-        <button data-m="none" aria-pressed="false">只看底图</button>
-      </div>
+      <select id="metric" aria-label="地图着色指标">
+        <optgroup label="治安 · 按风险对应的分母">
+          <option value="bh" selected>入室盗窃 / 千户 / 年</option>
+          <option value="vc">车辆犯罪 / 千辆车 / 年</option>
+          <option value="vi">暴力与抢劫 / 千人 / 年</option>
+          <option value="vs">访客型犯罪占比（可信度）</option>
+        </optgroup>
+        <optgroup label="治安 · 旧口径（按居民）">
+          <option value="h">居家类犯罪 / 千人</option>
+          <option value="r">全口径犯罪 / 千人</option>
+        </optgroup>
+        <optgroup label="人口">
+          <option value="de">人口密度 / km²</option>
+          <option value="dg">本科及以上 %</option>
+          <option value="ag">25–39 岁 %</option>
+          <option value="ow">自有住房 %</option>
+          <option value="pr">私人租赁 %</option>
+        </optgroup>
+        <optgroup label="市场">
+          <option value="p">公寓中位价</option>
+          <option value="nb">新房占比 %</option>
+          <option value="t">年成交量 / 千人</option>
+        </optgroup>
+        <option value="none">只看底图</option>
+      </select>
       <div class="row"><span class="lbl">着色浓度</span><span class="v" id="opV">—</span></div>
       <input type="range" id="op" min="0" max="85" step="5" value="30" aria-label="着色浓度">
     </div>
@@ -265,16 +285,37 @@ const $ = s => document.querySelector(s);
 const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
-let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'h', ready = false;
+let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'bh', ready = false;
 let LGROUPS = [], SC = [], mode = 'station';
 
 const METRIC = {
-  h:  {t:'居家类犯罪 / 千人 · 36 个月', n:'入室盗窃 + 车辆犯罪 + 故意毁坏。受害者就是住户本人，所以按居住人口算才对得上。', f:v => v.toFixed(0)},
-  r:  {t:'全口径犯罪 / 千人 · 36 个月', n:'所有报案。Soho、牛津街这类地方会被白天人流灌爆。', f:v => v.toFixed(0)},
-  p:  {t:'公寓中位价 · 2024 年起', n:'Land Registry 实际成交。少于 10 笔不出数。', f:v => '£' + Math.round(v/1000) + 'k'},
-  nb: {t:'新房占比 · 2019 年起 %', n:'开发商新盘占该 LSOA 公寓成交的比例。分档固定，因为三分之二的 LSOA 是 0。', f:v => v.toFixed(0) + '%'},
-  t:  {t:'年成交量 / 千居民', n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。', f:v => v.toFixed(1)},
+  bh: {t:'入室盗窃 / 千户 / 年', f:v => v.toFixed(0),
+       n:'分母是住宅数，不是人口——被盗的是房子。伦敦中位 11.9，即一年约 1.2% 的住宅被入室。'},
+  vc: {t:'车辆犯罪 / 千辆车 / 年', f:v => v.toFixed(0),
+       n:'分母是该 LSOA 居民拥有的车（Census 2021 拥车分档估算）。中心区居民车少而访客车多，这里会虚高。'},
+  vi: {t:'暴力与抢劫 / 千人 / 年', f:v => v.toFixed(0),
+       n:'受害者是人，所以分母就是人口。人流大的地方仍会偏高。'},
+  vs: {t:'访客型犯罪占比 %', f:v => v.toFixed(0),
+       n:'商店行窃 + 扒窃占全部报案的比例。高 = 这里的犯罪主要发生在访客身上，上面几个数对住户的参考价值要打折。中位 3.7%，Soho 是 51%。'},
+  h:  {t:'居家类犯罪 / 千人 · 36 个月', f:v => v.toFixed(0),
+       n:'旧口径，保留作对照：入室+车辆+故意毁坏，除以居住人口。'},
+  r:  {t:'全口径犯罪 / 千人 · 36 个月', f:v => v.toFixed(0),
+       n:'所有报案除以居住人口。Soho 每千居民 16,987 起——这个数几乎与住户无关。'},
+  de: {t:'人口密度 / km²', f:v => Math.round(v/1000) + 'k',
+       n:'Census 2021 常住人口 ÷ LSOA 面积。中位 9,003。'},
+  dg: {t:'本科及以上 %', f:v => v.toFixed(0) + '%',
+       n:'16 岁以上人口中 Level 4+ 学历的比例。中位 44.8%。'},
+  ag: {t:'25–39 岁 %', f:v => v.toFixed(0) + '%', n:'Census 2021 五岁分组合计。中位 24.6%。'},
+  ow: {t:'自有住房 %', f:v => v.toFixed(0) + '%', n:'全款或按揭自住的家庭比例。中位 44.6%。'},
+  pr: {t:'私人租赁 %', f:v => v.toFixed(0) + '%', n:'向私人房东或中介租住的家庭比例。中位 27.9%。'},
+  p:  {t:'公寓中位价 · 2024 年起', f:v => '£' + Math.round(v/1000) + 'k',
+       n:'Land Registry 实际成交。少于 10 笔不出数。'},
+  nb: {t:'新房占比 · 2019 年起 %', f:v => v.toFixed(0) + '%',
+       n:'开发商新盘占该 LSOA 公寓成交的比例。分档固定，因为三分之二的 LSOA 是 0。'},
+  t:  {t:'年成交量 / 千居民', f:v => v.toFixed(1),
+       n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。'},
 };
+
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
                resale:true, op:0.30,
                layers:{line:true, stn:true, prem:true, mkt:false, sch:true, lst:true},
@@ -570,6 +611,7 @@ function selectScheme(x){
   const warn = [];
   if (x.pre) warn.push('这条街在楼盘开卖前就有公寓成交，二手数字是混的，已隐去。');
   if (x.ps >= 15) warn.push(`该街 ${x.ps}% 的成交价低于自身上四分位的一半，多半是共享产权份额价，已从中位数里剔除。`);
+  if (x.vs != null && x.vs >= 20) warn.push(`${x.vs.toFixed(0)}% 的报案是商店行窃或扒窃——周边有商场或景点，住户口径的犯罪数被商铺入室拉高了。`);
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${x.s}</h2>
     <div class="where">${x.sec} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}</div>
@@ -586,7 +628,9 @@ function selectScheme(x){
     </dl>
     <div class="sect">周边 · 步行 800 米</div>
     <dl class="kv">
-      <dt>居家类犯罪 / 千人</dt><dd>${x.home == null ? '—' : x.home.toFixed(0)}<span class="na"> · 伦敦 56</span></dd>
+      <dt>入室盗窃 / 千户 / 年</dt><dd>${x.bh == null ? '—' : x.bh.toFixed(0)}<span class="na"> · 伦敦 12</span></dd>
+      <dt>车辆犯罪 / 千车 / 年</dt><dd>${x.vc == null ? '—' : x.vc.toFixed(0)}<span class="na"> · 伦敦 30</span></dd>
+      <dt>访客型犯罪占比</dt><dd>${x.vs == null ? '—' : x.vs.toFixed(0) + '%'}<span class="na"> · 伦敦 4%</span></dd>
       <dt>商店</dt><dd>${x.shop}</dd>
       <dt>咖啡馆餐厅酒吧</dt><dd>${x.food}</dd>
       <dt>公园</dt><dd>${x.park}</dd>
@@ -631,9 +675,12 @@ function select(s){
     </dl>
     <div class="sect">治安 · 警方 36 个月</div>
     <dl class="kv">
-      <dt>居家类 / 千人</dt><dd>${s.home == null ? '—' : s.home.toFixed(0)}<span class="na"> · 伦敦 56</span></dd>
+      <dt>入室盗窃 / 千户 / 年</dt><dd>${s.bh == null ? '—' : s.bh.toFixed(0)}<span class="na"> · 伦敦 12</span></dd>
+      <dt>车辆犯罪 / 千车 / 年</dt><dd>${s.vc == null ? '—' : s.vc.toFixed(0)}<span class="na"> · 伦敦 30</span></dd>
+      <dt>访客型犯罪占比</dt><dd>${s.vs == null ? '—' : s.vs.toFixed(0) + '%'}<span class="na"> · 伦敦 4%</span></dd>
       <dt>全口径 / 千人</dt><dd>${s.res == null ? '—' : s.res.toFixed(0)}<span class="na"> · 伦敦 253</span></dd>
     </dl>
+    ${s.vs != null && s.vs >= 20 ? `<p class="caveat">⚠ 这里 ${s.vs.toFixed(0)}% 的报案是商店行窃或扒窃，说明周边有商场或景点。上面两个住户口径的数会被商铺入室拉高，实际住户风险低于读数。</p>` : ''}
     <div class="sect">步行 800 米内</div>
     <dl class="kv">
       <dt>超市 / 便利店</dt><dd>${s.smkt ?? '—'} / ${s.shop ?? '—'}</dd>
@@ -645,7 +692,9 @@ function select(s){
     <div class="sect">线路</div>
     <div class="lines">${s.L.map(l => `<span class="line" style="background:${LINE_COLOR[l] || '#5b6b78'}">${l}</span>`).join('')}</div>
     ${sl ? devBlock(sl[0], sl[1]) : ''}
-    <p class="caveat">治安是车站 800 米内各 LSOA 按人口加权。居家类只数入室盗窃、车辆犯罪与故意毁坏——受害者就是住户本人，所以分母对得上；全口径在 Soho、牛津街这类地方会被白天人流灌爆。</p>`;
+    <p class="caveat">治安按车站 800 米内的实际暴露面算：入室盗窃除以住宅数，车辆犯罪除以居民拥有的车，不是除以人口。
+      人口分母会让住得少、人流大的地方（Soho 每千居民 16,987 起）看起来极危险，而那些案子几乎与住户无关。
+      剩下修不掉的是警方把商铺入室和住宅入室记成同一类，所以「访客型犯罪占比」用来判断上面的数该打多少折。</p>`;
   d.querySelector('.close').onclick = () => {
     d.hidden = true; SEL = null;
     $('#app').classList.remove('with-detail');
@@ -670,10 +719,8 @@ function drawLegend(){
   $('#rampHi').textContent = m.f(br[br.length-1]) + '+';
 }
 function wire(){
-  $('#metric').onclick = e => {
-    const b = e.target.closest('button'); if (!b) return;
-    metric = b.dataset.m;
-    for (const x of $('#metric').children) x.setAttribute('aria-pressed', x === b);
+  $('#metric').onchange = e => {
+    metric = e.target.value;
     drawLegend();
     MAP.setPaintProperty('lsoa-fill', 'fill-color', fillColor(metric));
     MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : state.op);
@@ -803,7 +850,7 @@ async function boot(){
 
     MAP.addSource('lsoa', {type:'geojson', data:lsoa});
     MAP.addLayer({id:'lsoa-fill', type:'fill', source:'lsoa',
-      paint:{'fill-color':fillColor('h'), 'fill-opacity':state.op}}, firstRoad);
+      paint:{'fill-color':fillColor('bh'), 'fill-opacity':state.op}}, firstRoad);
     MAP.addLayer({id:'lsoa-line', type:'line', source:'lsoa',
       paint:{'line-color':'#ffffff', 'line-width':0.3, 'line-opacity':0.35}}, firstRoad);
 

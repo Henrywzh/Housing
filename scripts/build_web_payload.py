@@ -42,7 +42,8 @@ def main():
             "price": num(r.median_price), "p25": num(r.p25_price), "ns": int(r.n_sales),
             "psf": num(r.psf), "sqft": num(r.sqft), "npsf": int(r.n_psf),
             "new": int(r.n_new),
-            "home": num(r.home_per_1000, 1), "res": num(r.resident_per_1000, 1),
+            "home": num(r.home_per_1000, 1), "bh": num(r.burglary_per_1000_hh, 1),
+            "vc": num(r.vehicle_per_1000_cars, 1), "vs": num(r.visitor_share, 1), "res": num(r.resident_per_1000, 1),
             "pop": int(r.population),
             "shop": num(getattr(r, "n_shops", None)), "smkt": num(getattr(r, "n_supermarket", None)),
             "park": num(getattr(r, "n_parks", None)), "food": num(getattr(r, "n_food", None)),
@@ -57,8 +58,17 @@ def main():
     # MapLibre colours a fill from the feature's own properties, so the numbers
     # travel inside the geometry rather than in a second file joined at runtime.
     met = pd.read_csv(PROC / "lsoa_metrics.csv").set_index("lsoa")
+    soc = pd.read_csv(PROC / "lsoa_social.csv").set_index("lsoa")
+    met = met.join(soc[["burglary_per_1000_hh", "vehicle_per_1000_cars",
+                        "violence_per_1000", "visitor_share", "density",
+                        "degree_pct", "age_25_39_pct", "owned_pct",
+                        "private_rent_pct"]])
     geo = json.loads((PROC / "lsoa_london.geojson").read_text())
     KEYS = {"h": ("home_per_1000", 1), "r": ("resident_per_1000", 0),
+            "bh": ("burglary_per_1000_hh", 1), "vc": ("vehicle_per_1000_cars", 1),
+            "vi": ("violence_per_1000", 1), "vs": ("visitor_share", 1),
+            "de": ("density", 0), "dg": ("degree_pct", 1), "ag": ("age_25_39_pct", 1),
+            "ow": ("owned_pct", 1), "pr": ("private_rent_pct", 1),
             "p": ("median", 0), "nb": ("new_pct", 0), "t": ("turnover", 1)}
     hit = 0
     for f in geo["features"]:
@@ -153,7 +163,8 @@ def main():
             "rm": num(r.resale_median), "r25": num(r.resale_p25), "nm": num(r.new_median),
             "psf": num(r.psf), "gap": num(r.gap_pct, 1),
             "ps": num(r.part_share_pct, 1), "pre": bool(r.pre_existing_stock),
-            "home": num(r.home_per_1000, 1),
+            "home": num(r.home_per_1000, 1), "bh": num(r.burglary_per_1000_hh, 1),
+            "vc": num(r.vehicle_per_1000_cars, 1), "vs": num(r.visitor_share, 1),
             "shop": int(r.n_shops), "food": int(r.n_food), "park": int(r.n_parks),
             "prem": bool(r.premium_grocer),
             "has": any(r.street == a for a, _ in lst_streets)})

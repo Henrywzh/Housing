@@ -47,6 +47,12 @@ def within(sxy, pxy, r=WALK_M):
     return out
 
 
+def rate(num, den, per=1000, months=36):
+    """Crimes per 1,000 units of exposure per year, or nothing if the base is thin."""
+    n, d = num.sum(), den.sum()
+    return float(n / d * per * 12 / months) if d >= 100 else np.nan
+
+
 def centroids(path):
     g = json.loads(path.read_text())
     code, lat, lon = [], [], []
@@ -118,6 +124,14 @@ def main():
 
     saf = pd.read_csv(OUT / "lsoa_safety.csv").merge(centroids(RAW / "lsoa_london_bgc.geojson"),
                                                      on="LSOA code", how="inner")
+    soc = pd.read_csv(OUT / "lsoa_social.csv").rename(columns={"lsoa": "LSOA code"})
+    saf = saf.merge(soc[["LSOA code", "households", "cars", "cat_burglary",
+                         "cat_vehicle_crime", "cat_shoplifting",
+                         "cat_theft_from_the_person"]].rename(
+                             columns={"cat_burglary": "n_burg", "cat_vehicle_crime": "n_veh",
+                                      "cat_shoplifting": "n_shop",
+                                      "cat_theft_from_the_person": "n_pick"}),
+                    on="LSOA code", how="left")
     lxy = xy(saf["lat"], saf["lon"])
 
     amen = {k: (v, xy(v["lat"], v["lon"])) for k, v in load_osm().items()}
@@ -143,7 +157,15 @@ def main():
                "sqft": f["sqft"].median() if len(f) >= 20 else np.nan,
                "n_lsoa": len(l), "population": int(w.sum()) if len(l) else 0,
                "resident_per_1000": float(np.average(l["resident_per_1000"], weights=w)) if len(l) else np.nan,
-               "home_per_1000": float(np.average(l["home_per_1000"], weights=w)) if len(l) else np.nan}
+               "home_per_1000": float(np.average(l["home_per_1000"], weights=w)) if len(l) else np.nan,
+               # Summed, not averaged: a rate for the catchment is its own crimes
+               # over its own households, which is not the mean of the LSOA rates.
+               "households": int(l["households"].sum()) if len(l) else 0,
+               "burglary_per_1000_hh": rate(l["n_burg"], l["households"]),
+               "vehicle_per_1000_cars": rate(l["n_veh"], l["cars"]),
+               "visitor_share": (float((l["n_shop"].sum() + l["n_pick"].sum())
+                                       / l["crimes"].sum() * 100)
+                                 if len(l) and l["crimes"].sum() else np.nan)}
         for k, idx in near_a.items():
             rec[f"n_{k}"] = len(idx[i])
         if "shops" in amen:
