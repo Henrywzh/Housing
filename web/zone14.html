@@ -124,6 +124,21 @@ label.chk input{accent-color:var(--signal)}
 .line{font-size:10.5px;font-family:Archivo,sans-serif;font-weight:600;padding:2px 6px;
   border-radius:3px;color:#fff;white-space:nowrap}
 .caveat{font-size:11.5px;color:var(--muted);line-height:1.45;margin:9px 0 0}
+.lcard{border:1px solid var(--rule);border-radius:7px;padding:9px 10px;margin-bottom:8px;
+  background:var(--panel-2)}
+.lcard .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.lcard .p{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;
+  font-variant-numeric:tabular-nums}
+.lcard .b{font-family:Archivo,sans-serif;font-size:11px;font-weight:600;color:var(--muted)}
+.lcard .g{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 8px;margin-top:6px;
+  font-size:11px}
+.lcard .g b{display:block;font-family:"IBM Plex Mono",monospace;font-size:12.5px;
+  font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.lcard .g span{color:var(--muted)}
+.lcard a{display:inline-block;margin-top:7px;font-size:11.5px;color:var(--signal);
+  text-decoration:none;font-weight:600}
+.lcard a:hover{text-decoration:underline}
+.lcard .src{font-size:10.5px;color:var(--muted);margin-top:4px}
 .na{color:var(--muted)}
 
 #loading{position:absolute;inset:0;display:grid;place-items:center;background:var(--plate);
@@ -178,6 +193,7 @@ label.chk input{accent-color:var(--signal)}
       <input type="range" id="crime" min="20" max="200" step="5" value="200" aria-label="居家类犯罪上限">
       <label class="chk"><input type="checkbox" id="prem"> 步行内有 Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="multi"> 两条线以上</label>
+      <label class="chk"><input type="checkbox" id="lst" checked> 显示 32 个候选二手房源</label>
     </div>
 
     <div class="block">
@@ -220,8 +236,9 @@ const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
 let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'h', ready = false;
+let LGROUPS = [];
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
-               w:{safe:1, cheap:1, conv:1}};
+               listings:true, w:{safe:1, cheap:1, conv:1}};
 
 /* ---------- scoring ---------- */
 function percentiles(vals){
@@ -298,6 +315,32 @@ function amenFC(s){
   return {type:'FeatureCollection', features:out};
 }
 
+// Thirty-two listings sit on fifteen points, because Price Paid knows streets and
+// not blocks and several listings share a street. One marker per point, carrying
+// how many are on it, beats scattering them at coordinates nobody measured.
+function groupListings(rows){
+  const by = new Map();
+  for (const r of rows){
+    if (typeof r.lat !== 'number' || typeof r.lon !== 'number') continue;
+    const k = r.lat.toFixed(5) + ',' + r.lon.toFixed(5);
+    if (!by.has(k)) by.set(k, {lat:r.lat, lon:r.lon, dev:r.development, street:r.street,
+                              geo:r.geo, rows:[]});
+    by.get(k).rows.push(r);
+  }
+  return [...by.values()].map((g, i) => {
+    g.i = i;
+    g.rows.sort((a, b) => b.net_after_mgmt - a.net_after_mgmt);
+    g.best = g.rows[0].net_after_mgmt;
+    g.from = Math.min(...g.rows.map(r => r.price));
+    return g;
+  });
+}
+function listingFC(){
+  return {type:'FeatureCollection', features:(state.listings ? LGROUPS : []).map(g => ({
+    type:'Feature', geometry:{type:'Point', coordinates:[g.lon, g.lat]},
+    properties:{i:g.i, n:g.rows.length, label:String(g.rows.length)}}))};
+}
+
 /* ---------- render ---------- */
 function draw(){
   const keep = S.filter(passes);
@@ -335,6 +378,60 @@ function devBlock(name, v){
       <dt>新房→二手 / 平尺</dt><dd>${g.gap_psf_pct == null ? '<span class="na">样本不足</span>' : g.gap_psf_pct + '%'}</dd>
     </dl>`;
 }
+function money(v){ return '£' + v.toLocaleString(); }
+// Price Paid stores street names shouted; nobody writes them that way.
+const title = t => t.toLowerCase().replace(/(^|[\s-])(\w)/g,
+  (_, a, b) => a + b.toUpperCase());
+function selectGroup(g){
+  SEL = null;
+  const d = $('#detail');
+  d.hidden = false;
+  $('#app').classList.add('with-detail');
+  requestAnimationFrame(() => MAP.resize());
+  MAP.getSource('ring').setData(ringFC(null));
+  MAP.getSource('amen').setData(amenFC(null));
+  d.scrollTop = 0;
+  const dev = SHORT.developments[g.dev] || {};
+  d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
+    <h2>${g.dev}</h2>
+    <div class="where">${g.geo === 'street'
+        ? title(g.street) + ' · ' + g.rows.length + ' 套在售'
+        : '未能定位到具体街道，标在楼盘中心 · ' + g.rows.length + ' 套在售'}</div>
+    ${g.rows.map(r => `<div class="lcard">
+      <div class="top"><span class="p">${money(r.price)}</span>
+        <span class="b">${r.beds} 房 · ${r.sqft} ft² · £${r.psf_asking}/ft²</span></div>
+      <div class="g">
+        <span>毛收益<b>${r.gross_yield}%</b></span>
+        <span>扣费用<b>${r.net_yield}%</b></span>
+        <span>再扣管理空置<b>${r.net_after_mgmt}%</b></span>
+        <span>租金/月<b>£${r.rent_pcm.toLocaleString()}</b></span>
+        <span>物业费/年<b>£${r.service_charge.toLocaleString()}</b></span>
+        <span>地租/年<b>${r.ground_rent ? '£' + r.ground_rent : '0'}</b></span>
+      </div>
+      <div class="src">${r.building} · 首次新房成交 ${r.built} · 面积来自${
+        r.sqft_src === 'listing' ? '房源披露' : r.sqft_src === 'EPC scheme median'
+        ? '该楼盘 EPC 实测中位' : '假设'} · 租金中位取自同楼盘 ${r.rent_n} 条挂牌</div>
+      <a href="${r.url}" target="_blank" rel="noopener">在 Rightmove 打开 →</a>
+    </div>`).join('')}
+    <div class="sect">楼盘</div>
+    <dl class="kv">
+      <dt>物业费</dt><dd>£${dev.sc_psf}/ft²</dd>
+      <dt>新房→二手 / 平尺</dt><dd>${(dev.new_vs_resale || {}).gap_psf_pct == null
+        ? '<span class="na">样本不足</span>' : dev.new_vs_resale.gap_psf_pct + '%'}</dd>
+      <dt>最近车站</dt><dd>${dev.station || '—'}</dd>
+    </dl>
+    <p class="caveat">挂牌价与挂牌租金，不是成交价与成交租金，抓取于 ${SHORT.meta.retrieved}——可能已经卖掉或改价。
+      收益 = 租金×12 扣物业费、地租，再扣租金的 12% 作为中介费与空置。
+      物业费按面积×£${dev.sc_psf}/ft² 估算，${dev.sc_src || ''}。</p>`;
+  d.querySelector('.close').onclick = () => {
+    d.hidden = true;
+    $('#app').classList.remove('with-detail');
+    requestAnimationFrame(() => MAP.resize());
+    draw();
+  };
+  draw();
+}
+
 function select(s){
   if (!s) return;
   SEL = s;
@@ -416,12 +513,14 @@ function wire(){
   const sync = () => {
     state.price = +$('#price').value; state.crime = +$('#crime').value;
     state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
+    state.listings = $('#lst').checked;
+    if (ready) MAP.getSource('listings').setData(listingFC());
     state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
     $('#priceV').textContent = '≤ £' + state.price + 'k';
     $('#crimeV').textContent = state.crime >= 200 ? '不限' : '≤ ' + state.crime;
     draw();
   };
-  for (const id of ['price','crime','prem','multi','wSafe','wCheap','wConv'])
+  for (const id of ['price','crime','prem','multi','lst','wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', sync);
   sync();
 }
@@ -465,14 +564,19 @@ function styleFor(buffer){
 /* ---------- boot ---------- */
 async function boot(){
   const note = t => { const p = $('#progress'); if (p) p.textContent = t; };
-  const j = p => fetch(p).then(r => r.json());
+  // Revalidate rather than reuse blindly: the payload has to match the page it
+  // shipped with, and a cached shortlist from an older build is a version
+  // mismatch that looks exactly like a bug. A 304 still costs nothing.
+  const opt = {cache:'no-cache'};
+  const j = p => fetch(p, opt).then(r => r.json());
   note('底图 14.7 MB…');
   const [buffer, lsoa, bor, stations, amen, breaks, short] = await Promise.all([
-    fetch('data/london.pmtiles.wasm').then(r => r.arrayBuffer()),
+    fetch('data/london.pmtiles.wasm', opt).then(r => r.arrayBuffer()),
     j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
     j('data/amenities.json'), j('data/breaks.json'),
     j('data/shortlist.json').catch(() => null)]);
   S = stations; AM = amen; BREAKS = breaks; SHORT = short;
+  LGROUPS = SHORT ? groupListings(SHORT.listings) : [];
   score();
   note('绘制…');
 
@@ -529,7 +633,23 @@ async function boot(){
               'text-offset':[0, 1.1], 'text-anchor':'top', 'text-allow-overlap':false},
       paint:{'text-color':'#16202b', 'text-halo-color':'#ffffff', 'text-halo-width':1.6}});
 
+    MAP.addSource('listings', {type:'geojson', data:listingFC()});
+    MAP.addLayer({id:'listing-dot', type:'circle', source:'listings',
+      paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 9, 5, 13, 9, 16, 12],
+             'circle-color':'#c2402a', 'circle-stroke-color':'#ffffff',
+             'circle-stroke-width':1.8, 'circle-opacity':0.95}});
+    MAP.addLayer({id:'listing-count', type:'symbol', source:'listings', minzoom:10.5,
+      layout:{'text-field':['get','label'], 'text-font':['NotoSansMedium'],
+              'text-size':['interpolate', ['linear'], ['zoom'], 10.5, 9, 14, 12],
+              'text-allow-overlap':true},
+      paint:{'text-color':'#ffffff'}});
+
     MAP.on('click', 'stations-dot', e => select(S.find(s => s.n === e.features[0].properties.n)));
+    MAP.on('click', 'listing-dot', e => selectGroup(LGROUPS[e.features[0].properties.i]));
+    for (const id of ['listing-dot', 'listing-count']){
+      MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
+      MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
+    }
     for (const id of ['stations-dot', 'amen-dot']){
       MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
       MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
@@ -541,11 +661,17 @@ async function boot(){
 
     ready = true;
     drawLegend(); wire();
-    $('#stamp').textContent = `${S.length} 站 · 4,994 LSOA · 底图 z9–13`;
+    $('#stamp').textContent = `${S.length} 站 · 4,994 LSOA · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 房源`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.
     select(S.find(s => s.n === 'Kidbrooke') || S[0]);
   });
 }
-boot();
+boot().catch(e => {
+  // A half-loaded page that says nothing is worse than one that says what broke.
+  const el = $('#loading');
+  if (el) el.innerHTML = '地图没能加载。<br><span style="font-size:11.5px">'
+    + String(e && e.message || e).replace(/</g, '&lt;') + '</span>';
+  throw e;
+});
 </script>

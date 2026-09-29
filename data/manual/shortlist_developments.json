@@ -84,7 +84,10 @@
           2340
         ]
       },
-      "search": "https://www.rightmove.co.uk/property-for-sale/Colindale/1-bed-flats.html"
+      "search": "https://www.rightmove.co.uk/property-for-sale/Colindale/1-bed-flats.html",
+      "geocode_streets": [
+        "COLINDALE AVENUE"
+      ]
     },
     "The Brentford Project": {
       "area": "Brentford, Hounslow TW8",
@@ -184,5 +187,6 @@
       "search": "https://www.rightmove.co.uk/property-for-sale/Kidbrooke/1-bed-flats.html"
     }
   },
-  "_streets_note": "Price Paid identifies a development only by street, so each scheme is written out as its set of streets. The sets were checked against the first and last new-build sale on every street in the postcode sector: a street that belongs to the scheme starts selling when the scheme does. That is what separates Colindale Gardens (Redrow, RAF Hendon names, from 2019) from Beaufort Park (St George, newspaper names, 2016-18) next door, and The Brentford Project (Ballymore, from 2022) from Brentford Lock West (2005-2020) on the same water."
+  "_streets_note": "Price Paid identifies a development only by street, so each scheme is written out as its set of streets. The sets were checked against the first and last new-build sale on every street in the postcode sector: a street that belongs to the scheme starts selling when the scheme does. That is what separates Colindale Gardens (Redrow, RAF Hendon names, from 2019) from Beaufort Park (St George, newspaper names, 2016-18) next door, and The Brentford Project (Ballymore, from 2022) from Brentford Lock West (2005-2020) on the same water.",
+  "_geocode_note": "`geocode_streets` are addresses that belong to a scheme's frontage but not to its analysis. 144 Colindale Avenue is the Redrow sales address on the main road; putting Colindale Avenue in `streets` would drag 1930s stock into the new-versus-resale gap, which is exactly the error that made that scheme look 26% cheaper second-hand."
 }

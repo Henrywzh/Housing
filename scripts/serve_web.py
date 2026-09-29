@@ -18,6 +18,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                       ".pmtiles": "application/octet-stream",
                       ".pbf": "application/x-protobuf"}
 
+    def end_headers(self):
+        # The page and its payload are rebuilt constantly; a cached data file
+        # against a new page is a version mismatch that looks like a bug.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def log_message(self, fmt, *a):
         pass
 

@@ -24,7 +24,7 @@ Listings and scheme-level figures are hand-collected snapshots in data/manual/,
 dated in the file. Everything else is computed from Price Paid, EPC and police
 data by the rest of the pipeline.
 """
-import json, pathlib, statistics
+import json, pathlib, re, statistics
 import numpy as np
 import pandas as pd
 
@@ -81,6 +81,66 @@ def gap(ppd, psf, streets):
     return g
 
 
+# Price Paid carries a street, never a block, so a listing's block name has to be
+# turned into one. Most listings give both ("Lewis House, Bradshaw Yard"), which
+# is enough to place the ones that give only the block ("Lewis House") -- the
+# listings resolve each other.
+ABBR = {"AVE": "AVENUE", "RD": "ROAD", "SQ": "SQUARE", "ST": "STREET", "DR": "DRIVE",
+        "CL": "CLOSE", "LN": "LANE"}
+
+
+def norm(t):
+    t = re.sub(r"[（(].*?[)）]", " ", str(t)).upper()
+    t = re.sub(r"[^A-Z ]", " ", t)
+    return " ".join(ABBR.get(w, w) for w in t.split())
+
+
+def street_points(ppd, pc, streets, sector):
+    """Median coordinate of each street, from the postcodes that sold on it."""
+    d = ppd[ppd["street"].isin(streets) & ppd["postcode"].str.startswith(sector, na=False)]
+    d = d.merge(pc, on="postcode", how="inner")
+    g = d.groupby("street")[["lat", "lon"]].median()
+    return {k: (round(v["lat"], 6), round(v["lon"], 6)) for k, v in g.iterrows()}
+
+
+def locate(lst, devs, ppd, pc):
+    """-> {listing id: (lat, lon, street or None, 'street' | 'development')}."""
+    pts, out = {}, {}
+    for name, d in devs.items():
+        sector = d["area"].rsplit(" ", 1)[-1]          # "... Barnet NW7" -> "NW7"
+        streets = [s.upper() for s in d["streets"] + d.get("geocode_streets", [])]
+        pts[name] = street_points(ppd, pc, streets, sector)
+        if not pts[name]:
+            raise SystemExit(f"{name}: no street could be geocoded in sector {sector}")
+
+    # Pass 1: blocks that name their own street teach the blocks that do not.
+    alias = {}
+    for r in lst.itertuples():
+        b = norm(r.building)
+        for st in pts[r.development]:
+            if st in b:
+                block = b.split(st)[0].strip()
+                if block:
+                    alias.setdefault((r.development, block), st)
+
+    for r in lst.itertuples():
+        b, chosen = norm(r.building), None
+        for st in sorted(pts[r.development], key=len, reverse=True):
+            if st in b:
+                chosen = st
+                break
+        if chosen is None:
+            chosen = alias.get((r.development, b))
+        if chosen:
+            lat, lon = pts[r.development][chosen]
+            out[r.id] = (lat, lon, chosen, "street")
+        else:
+            lat = sum(v[0] for v in pts[r.development].values()) / len(pts[r.development])
+            lon = sum(v[1] for v in pts[r.development].values()) / len(pts[r.development])
+            out[r.id] = (round(lat, 6), round(lon, 6), None, "development")
+    return out
+
+
 def main():
     man = json.loads((MAN / "shortlist_developments.json").read_text())
     devs = man["developments"]
@@ -92,6 +152,8 @@ def main():
                       dtype={"postcode": str})
     ppd["street"] = ppd["street"].str.upper()
     st = pd.read_csv(OUT / "stations.csv")
+    pc = pd.read_csv(RAW / "postcodes.csv", usecols=["postcode", "lat", "lon"])
+    where = locate(lst, devs, ppd, pc)
 
     meta = {}
     for name, d in devs.items():
@@ -139,7 +201,9 @@ def main():
         gross = rent * 12 / r.asking_price
         net = (rent * 12 - sc - gr) / r.asking_price
         net2 = (rent * 12 * (1 - MGMT_VOID) - sc - gr) / r.asking_price
+        lat, lon, street, level = where[r.id]
         rows.append({"id": r.id, "url": f"https://www.rightmove.co.uk/properties/{r.id}",
+                     "lat": lat, "lon": lon, "street": street, "geo": level,
                      "development": r.development, "building": r.building, "beds": beds,
                      "price": r.asking_price, "sqft": round(size), "sqft_src": src,
                      "psf_asking": round(r.asking_price / size),
