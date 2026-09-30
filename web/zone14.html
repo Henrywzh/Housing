@@ -887,6 +887,22 @@ class BufferSource {
   getKey(){ return this.key; }
   async getBytes(offset, length){ return {data: this.buf.slice(offset, offset + length)}; }
 }
+// Glyphs go through their own protocol so a range this page does not ship comes
+// back empty instead of failing. MapLibre shapes a whole tile's labels in one
+// pass, and one glyph range that fails to parse -- a 404 page, say, from a host
+// that answers a missing file with HTML -- drops that entire tile, streets and
+// all: a curly apostrophe in "Bishop’s Mansions" once blanked a square
+// kilometre of the City. A missing character should cost that character.
+const GLYPH_RANGES = new Set(['0-255', '256-511', '8192-8447', '8448-8703']);
+maplibregl.addProtocol('glyphs', async (params, abort) => {
+  const [, stack, range] = params.url.match(/^glyphs:\/\/([^/]+)\/(\d+-\d+)$/) || [];
+  const empty = {data: new ArrayBuffer(0)};
+  if (!GLYPH_RANGES.has(range)) return empty;
+  try {
+    const r = await fetch(`data/fonts/${stack}/${range}.wasm`, {signal: abort.signal});
+    return r.ok ? {data: await r.arrayBuffer()} : empty;
+  } catch (e) { if (e.name === 'AbortError') throw e; return empty; }
+});
 function styleFor(buffer){
   const proto = new pmtiles.Protocol();
   maplibregl.addProtocol('pmtiles', proto.tile);
@@ -903,7 +919,7 @@ function styleFor(buffer){
     .replace(/"Noto Sans [^"]*"/g, '"NotoSansRegular"'));
   return {
     version: 8,
-    glyphs: 'data/fonts/{fontstack}/{range}.wasm',
+    glyphs: 'glyphs://{fontstack}/{range}',
     sprite: new URL('data/sprites/light', location.href).href,
     sources: {protomaps: {type:'vector', url:'pmtiles://london',
                           attribution:'© OpenStreetMap · Protomaps'}},
