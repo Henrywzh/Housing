@@ -84,6 +84,7 @@ label.chk input{accent-color:var(--signal)}
 #railOps span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
 #railBlock.off{opacity:.4;pointer-events:none}
 #railBlock .seg button{padding:3px 7px;font-size:11px}
+#railStnRow{font-size:12px;margin-top:2px}
 
 #listwrap{flex:1 1 auto;min-height:160px;overflow-y:auto}
 #count{padding:9px 14px 4px;font-size:11.5px;color:var(--muted)}
@@ -233,6 +234,7 @@ label.chk input{accent-color:var(--signal)}
     <div class="block" id="railBlock">
       <div class="lbl">国铁运营商</div>
       <div id="railOps"></div>
+      <label class="chk" id="railStnRow"><input type="checkbox" id="railStn"> 车站列表也只看这几家</label>
       <div class="seg"><button id="railAll" type="button">全选</button><button id="railNone" type="button">全不选</button></div>
     </div>
 
@@ -325,6 +327,30 @@ let LGROUPS = [], SC = [], mode = 'station', RAIL_ON = null;
 // network when the reader picks one. That is what the filter is for: "where do
 // Southeastern's trains actually go" is a question the merged layer cannot
 // answer, and it is the question behind choosing a flat in south London.
+// A station lists the brands that call there, and they are not always the names
+// in the legend: Gatwick Express runs on Southern's metals and Stansted Express
+// on Greater Anglia's, and anything that is not a way to commute into London is
+// the one grey group. Folded exactly as the line layer folds it, so a ticked box
+// means the same thing on the map and in the list.
+const RAIL_CANON = {
+  'Thameslink':'Thameslink', 'Southeastern':'Southeastern', 'Southern':'Southern',
+  'Gatwick Express':'Southern', 'Great Northern':'Great Northern',
+  'South Western Railway':'South Western Railway', 'Greater Anglia':'Greater Anglia',
+  'Stansted Express':'Greater Anglia', 'c2c':'c2c',
+  'Chiltern Railways':'Chiltern Railways',
+  'Great Western Railway':'Great Western Railway'};
+const RAIL_LONG = new Set(['Heathrow Express', 'Hull Trains', 'East Midlands Railway',
+  'West Midlands Trains', 'Grand Central', 'Lumo', 'Avanti West Coast', 'CrossCountry',
+  'London North Eastern Railway', 'Eurostar', 'Caledonian Sleeper']);
+let RAIL_OTHER = '';
+const railOpsOf = s => s.L
+  .map(l => RAIL_CANON[l] || (RAIL_LONG.has(l) ? RAIL_OTHER : null)).filter(Boolean);
+// Off, the ticks only colour the map. On, they are a filter, and a station with
+// no train at all fails it -- "only these operators" has to mean that, or
+// picking one company would still leave every tube station in the list.
+const passesRail = s => !state.railStn || !RAIL_ON
+  || railOpsOf(s).some(o => RAIL_ON.has(o));
+
 const railFilter = () => {
   const base = ['==', ['get','mode'], 'national-rail'];
   return RAIL_ON ? ['all', base, ['in', ['get','op'], ['literal', [...RAIL_ON]]]] : base;
@@ -344,9 +370,11 @@ function buildRailOps(lines){
     + `<input type="checkbox" checked data-op="${o.op}"><s></s>`
     + `<span>${o.short || o.op}</span></label>`).join('');
   const boxes = () => [...$('#railOps').querySelectorAll('input')];
+  RAIL_OTHER = ops[ops.length - 1].op;      // the grab-bag sorts last by design
   $('#railOps').addEventListener('input', () => {
     RAIL_ON = new Set(boxes().filter(b => b.checked).map(b => b.dataset.op));
     applyRail();
+    if (state.railStn) draw();
   });
   const setAll = on => { boxes().forEach(b => b.checked = on);
                          $('#railOps').dispatchEvent(new Event('input')); };
@@ -387,7 +415,7 @@ const METRIC = {
 };
 
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
-               resale:true, op:0.30,
+               resale:true, op:0.30, railStn:false,
                layers:{line:true, stn:true, prem:true, mkt:false, sch:true, lst:true},
                w:{safe:1, cheap:1, conv:1}};
 
@@ -449,6 +477,7 @@ function composite(s){
   return d ? n/d : null;
 }
 function passes(s){
+  if (!passesRail(s)) return false;
   if (!state.zones.has(s.zm)) return false;
   if (s.price != null && s.price > state.price*1000) return false;
   if (s.home != null && s.home > state.crime) return false;
@@ -814,7 +843,7 @@ function wire(){
   const sync = () => {
     state.price = +$('#price').value; state.crime = +$('#crime').value;
     state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
-    state.resale = $('#resale').checked;
+    state.resale = $('#resale').checked; state.railStn = $('#railStn').checked;
     state.op = +$('#op').value / 100;
     state.layers = {line:$('#lyLine').checked, rail:$('#lyRail').checked,
                     stn:$('#lyStn').checked,
@@ -838,7 +867,7 @@ function wire(){
     draw();
   };
   for (const id of ['price','crime','prem','multi','resale','op',
-                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lySch','lyLst',
+                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lySch','lyLst','railStn',
                     'wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', sync);
   sync();
