@@ -141,6 +141,13 @@ def main():
             "geometry": {"type": "MultiLineString",
                          "coordinates": [[[lon, lat] for lat, lon in seg]
                                          for seg in parts if len(seg) > 1]}})
+    # National Rail last in the file so it draws first, under the TfL colours:
+    # where they share track -- and through south London they often do -- the
+    # line a reader is looking for is the coloured one.
+    rail = RAW / "transport" / "rail.geojson"
+    if rail.exists():
+        src["features"] = json.loads(rail.read_text())["features"] + src["features"]
+
     tol = 10 / 111_320.0
     for f in src["features"]:
         out = []

@@ -214,6 +214,7 @@ label.chk input{accent-color:var(--signal)}
     <div class="block two">
       <div class="lbl">地图上显示</div>
       <label class="chk"><input type="checkbox" id="lyLine" checked> 地铁线路</label>
+      <label class="chk"><input type="checkbox" id="lyRail" checked> 国铁火车线</label>
       <label class="chk"><input type="checkbox" id="lyStn" checked> 车站</label>
       <label class="chk"><input type="checkbox" id="lyPrem" checked> Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="lyMkt"> 所有超市（放大后）</label>
@@ -283,6 +284,16 @@ const LINE_COLOR = {
   'Tram':'#84B817','London Overground':'#EE7C0E','Liberty':'#5D6061','Lioness':'#FFB600',
   'Mildmay':'#437EC0','Suffragette':'#76B82A','Weaver':'#823A62','Windrush':'#ED1B00'
 };
+// The train operators have no map colour, so the chips take the same navy the
+// National Rail layer is drawn in: what matters on a station panel is that the
+// service is a train, and which company's train is on the chip already.
+const RAIL_NAVY = '#1F3864';
+for (const op of ['Thameslink','Southeastern','Southern','South Western Railway',
+  'Greater Anglia','Great Northern','c2c','Chiltern Railways','Great Western Railway',
+  'East Midlands Railway','West Midlands Trains','Gatwick Express','Heathrow Express',
+  'Hull Trains','Grand Central','Lumo','Avanti West Coast',
+  'London North Eastern Railway','Eurostar'])
+  LINE_COLOR[op] = RAIL_NAVY;
 const $ = s => document.querySelector(s);
 const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
@@ -752,7 +763,8 @@ function wire(){
     state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
     state.resale = $('#resale').checked;
     state.op = +$('#op').value / 100;
-    state.layers = {line:$('#lyLine').checked, stn:$('#lyStn').checked,
+    state.layers = {line:$('#lyLine').checked, rail:$('#lyRail').checked,
+                    stn:$('#lyStn').checked,
                     prem:$('#lyPrem').checked,
                     mkt:$('#lyMkt').checked, sch:$('#lySch').checked,
                     lst:$('#lyLst').checked};
@@ -763,6 +775,7 @@ function wire(){
     if (ready){
       MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : state.op);
       for (const [id, on] of [['line-path', state.layers.line], ['line-casing', state.layers.line],
+                              ['rail-path', state.layers.rail], ['rail-casing', state.layers.rail],
                               ['grocer-dot', state.layers.prem], ['grocer-label', state.layers.prem],
                               ['market-dot', state.layers.mkt],
                               ['stations-label', state.layers.stn]])
@@ -771,7 +784,7 @@ function wire(){
     draw();
   };
   for (const id of ['price','crime','prem','multi','resale','op',
-                    'lyLine','lyStn','lyPrem','lyMkt','lySch','lyLst',
+                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lySch','lyLst',
                     'wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', sync);
   sync();
@@ -871,12 +884,29 @@ async function boot(){
     // per station, which over a real street map cuts corners through buildings.
     const firstLabel = (MAP.getStyle().layers.find(l => l.type === 'symbol') || {}).id;
     MAP.addSource('lines', {type:'geojson', data:lines});
-    MAP.addLayer({id:'line-casing', type:'line', source:'lines',
+    // National Rail is its own pair of layers, under the TfL ones and a little
+    // thinner. It is one navy rather than a colour per operator because outside
+    // TfL there is no line colour a reader carries in their head -- the tube map
+    // draws the trains as one styling for the same reason -- and because fifteen
+    // tube colours plus a choropleth is already the map's whole colour budget.
+    const isRail = ['==', ['get','mode'], 'national-rail'];
+    MAP.addLayer({id:'rail-casing', type:'line', source:'lines', filter:isRail,
+      layout:{'line-cap':'round', 'line-join':'round'},
+      paint:{'line-color':'#ffffff',
+             'line-width':['interpolate', ['linear'], ['zoom'], 10, 2, 13, 3.8, 16, 7],
+             'line-opacity':0.8}}, firstLabel);
+    MAP.addLayer({id:'rail-path', type:'line', source:'lines', filter:isRail,
+      layout:{'line-cap':'round', 'line-join':'round'},
+      paint:{'line-color':['get','color'], 'line-opacity':0.85,
+             'line-width':['interpolate', ['linear'], ['zoom'], 10, 1, 13, 2.2, 16, 4.2]}},
+      firstLabel);
+    const notRail = ['!=', ['get','mode'], 'national-rail'];
+    MAP.addLayer({id:'line-casing', type:'line', source:'lines', filter:notRail,
       layout:{'line-cap':'round', 'line-join':'round'},
       paint:{'line-color':'#ffffff',
              'line-width':['interpolate', ['linear'], ['zoom'], 10, 2.5, 13, 5, 16, 9],
              'line-opacity':0.8}}, firstLabel);
-    MAP.addLayer({id:'line-path', type:'line', source:'lines',
+    MAP.addLayer({id:'line-path', type:'line', source:'lines', filter:notRail,
       layout:{'line-cap':'round', 'line-join':'round'},
       paint:{'line-color':['get','color'],
              'line-width':['interpolate', ['linear'], ['zoom'], 10, 1.4, 13, 3, 16, 6]}},
@@ -975,9 +1005,13 @@ async function boot(){
     const have = new Set(lines.features.map(f => f.properties.name));
     const want = ['Elizabeth line', 'London Overground', 'DLR', 'Central', 'Victoria'];
     const gone = want.filter(n => !have.has(n));
+    const nr = lines.features.find(f => f.properties.mode === 'national-rail');
     $('#lineNote').textContent = gone.length
       ? `线路层缺 ${gone.join('、')}。`
-      : `${have.size} 条线路，实际轨道线形。Overground 按一条橙线画，不拆六条。`;
+      : `${have.size - (nr ? 1 : 0)} 条 TfL 线路，实际轨道线形；Overground 按一条橙线画，不拆六条。`
+        + (nr ? ' 深蓝是国铁：Southeastern、Thameslink、Southern、South Western、'
+              + 'Greater Anglia、c2c 等共用一个颜色。地铁色是伦敦人脑子里有的，'
+              + '火车线没有，所以不拆。南伦敦大片区域没有地铁，火车就是通勤。' : '');
     $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.
