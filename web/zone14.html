@@ -76,6 +76,14 @@ select:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
 input[type=range]{width:100%;accent-color:var(--signal)}
 label.chk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2);cursor:pointer}
 label.chk input{accent-color:var(--signal)}
+#railOps{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px}
+#railOps label{display:flex;align-items:center;gap:6px;font-size:11.5px;
+  color:var(--ink-2);cursor:pointer;min-width:0}
+#railOps input{accent-color:var(--signal);flex:0 0 auto;margin:0}
+#railOps s{flex:0 0 15px;height:0;border-top:3px dashed currentColor;text-decoration:none}
+#railOps span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+#railBlock.off{opacity:.4;pointer-events:none}
+#railBlock .seg button{padding:3px 7px;font-size:11px}
 
 #listwrap{flex:1 1 auto;min-height:160px;overflow-y:auto}
 #count{padding:9px 14px 4px;font-size:11.5px;color:var(--muted)}
@@ -222,6 +230,12 @@ label.chk input{accent-color:var(--signal)}
       <label class="chk"><input type="checkbox" id="lyLst" checked> 在售房源</label>
     </div>
 
+    <div class="block" id="railBlock">
+      <div class="lbl">国铁运营商</div>
+      <div id="railOps"></div>
+      <div class="seg"><button id="railAll" type="button">全选</button><button id="railNone" type="button">全不选</button></div>
+    </div>
+
     <div class="block">
       <div class="lbl">筛选</div>
       <div class="seg" id="zones" role="group" aria-label="Zone">
@@ -284,22 +298,61 @@ const LINE_COLOR = {
   'Tram':'#84B817','London Overground':'#EE7C0E','Liberty':'#5D6061','Lioness':'#FFB600',
   'Mildmay':'#437EC0','Suffragette':'#76B82A','Weaver':'#823A62','Windrush':'#ED1B00'
 };
-// The train operators have no map colour, so the chips take the same navy the
-// National Rail layer is drawn in: what matters on a station panel is that the
-// service is a train, and which company's train is on the chip already.
-const RAIL_NAVY = '#1F3864';
-for (const op of ['Thameslink','Southeastern','Southern','South Western Railway',
-  'Greater Anglia','Great Northern','c2c','Chiltern Railways','Great Western Railway',
-  'East Midlands Railway','West Midlands Trains','Gatwick Express','Heathrow Express',
-  'Hull Trains','Grand Central','Lumo','Avanti West Coast',
-  'London North Eastern Railway','Eurostar'])
-  LINE_COLOR[op] = RAIL_NAVY;
+// The same operator colours the map draws, so a chip on a station panel and a
+// dashed line on the map are recognisably the same company. Sub-brands take the
+// colour of the metals they run on, as they do on the map; everything that is
+// not a way to commute into London is the long-distance grey.
+Object.assign(LINE_COLOR, {
+  'Thameslink':'#EE4B95', 'Southeastern':'#0071B9', 'Southern':'#78BE20',
+  'Gatwick Express':'#78BE20', 'Great Northern':'#6B2C91',
+  'South Western Railway':'#1B3D6D', 'Greater Anglia':'#B01020',
+  'Stansted Express':'#B01020', 'c2c':'#D41B8C', 'Chiltern Railways':'#00857D',
+  'Great Western Railway':'#0A493E'});
+for (const op of ['East Midlands Railway','West Midlands Trains','Heathrow Express',
+  'Hull Trains','Grand Central','Lumo','Avanti West Coast','CrossCountry',
+  'London North Eastern Railway','Eurostar','Caledonian Sleeper'])
+  LINE_COLOR[op] = '#8A939B';
 const $ = s => document.querySelector(s);
 const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
 let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'br', ready = false;
-let LGROUPS = [], SC = [], mode = 'station';
+let LGROUPS = [], SC = [], mode = 'station', RAIL_ON = null;
+
+/* ---------- National Rail operators ---------- */
+// A track carrying four companies is four features, one per company, so a
+// corridor shows whoever is on top when everything is on -- and exactly one
+// network when the reader picks one. That is what the filter is for: "where do
+// Southeastern's trains actually go" is a question the merged layer cannot
+// answer, and it is the question behind choosing a flat in south London.
+const railFilter = () => {
+  const base = ['==', ['get','mode'], 'national-rail'];
+  return RAIL_ON ? ['all', base, ['in', ['get','op'], ['literal', [...RAIL_ON]]]] : base;
+};
+function applyRail(){
+  if (!ready) return;
+  for (const id of ['rail-path', 'rail-casing']) MAP.setFilter(id, railFilter());
+}
+function buildRailOps(lines){
+  const ops = lines.features.map(f => f.properties)
+    .filter(o => o.mode === 'national-rail')
+    .sort((a, b) => a.ui - b.ui);
+  if (!ops.length){ $('#railBlock').style.display = 'none'; return; }
+  RAIL_ON = new Set(ops.map(o => o.op));
+  $('#railOps').innerHTML = ops.map(o =>
+    `<label style="color:${o.color}" title="${o.op}（${o.n} 段轨道）">`
+    + `<input type="checkbox" checked data-op="${o.op}"><s></s>`
+    + `<span>${o.short || o.op}</span></label>`).join('');
+  const boxes = () => [...$('#railOps').querySelectorAll('input')];
+  $('#railOps').addEventListener('input', () => {
+    RAIL_ON = new Set(boxes().filter(b => b.checked).map(b => b.dataset.op));
+    applyRail();
+  });
+  const setAll = on => { boxes().forEach(b => b.checked = on);
+                         $('#railOps').dispatchEvent(new Event('input')); };
+  $('#railAll').onclick = () => setAll(true);
+  $('#railNone').onclick = () => setAll(false);
+}
 
 const METRIC = {
   br: {t:'住宅入室（估算）/ 千户 / 年', f:v => v.toFixed(0),
@@ -780,6 +833,7 @@ function wire(){
                               ['market-dot', state.layers.mkt],
                               ['stations-label', state.layers.stn]])
         MAP.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+      $('#railBlock').classList.toggle('off', !state.layers.rail);
     }
     draw();
   };
@@ -889,15 +943,21 @@ async function boot(){
     // TfL there is no line colour a reader carries in their head -- the tube map
     // draws the trains as one styling for the same reason -- and because fifteen
     // tube colours plus a choropleth is already the map's whole colour budget.
-    const isRail = ['==', ['get','mode'], 'national-rail'];
-    MAP.addLayer({id:'rail-casing', type:'line', source:'lines', filter:isRail,
-      layout:{'line-cap':'round', 'line-join':'round'},
+    // A dash, not a hue, is what separates these from the tube. The tube owns
+    // every colour on the wheel -- red, navy, green, teal, purple, magenta,
+    // orange, yellow, pink, grey, black -- so no palette could stay clear of it,
+    // and an operator drawn in its own livery colour would read as a tube line
+    // the reader had forgotten. Dashed, at three quarters the width, it reads as
+    // a different class of railway at a glance and the colours are then free to
+    // mean the company.
+    MAP.addLayer({id:'rail-casing', type:'line', source:'lines', filter:railFilter(),
+      layout:{'line-cap':'butt', 'line-join':'round'},
       paint:{'line-color':'#ffffff',
              'line-width':['interpolate', ['linear'], ['zoom'], 10, 2, 13, 3.8, 16, 7],
-             'line-opacity':0.8}}, firstLabel);
-    MAP.addLayer({id:'rail-path', type:'line', source:'lines', filter:isRail,
-      layout:{'line-cap':'round', 'line-join':'round'},
-      paint:{'line-color':['get','color'], 'line-opacity':0.85,
+             'line-opacity':0.85}}, firstLabel);
+    MAP.addLayer({id:'rail-path', type:'line', source:'lines', filter:railFilter(),
+      layout:{'line-cap':'butt', 'line-join':'round'},
+      paint:{'line-color':['get','color'], 'line-dasharray':[2.2, 1.3],
              'line-width':['interpolate', ['linear'], ['zoom'], 10, 1, 13, 2.2, 16, 4.2]}},
       firstLabel);
     const notRail = ['!=', ['get','mode'], 'national-rail'];
@@ -1001,17 +1061,18 @@ async function boot(){
     MAP.on('mouseleave', 'amen-dot', () => pop.remove());
 
     ready = true;
+    buildRailOps(lines);
     drawLegend(); wire();
     const have = new Set(lines.features.map(f => f.properties.name));
     const want = ['Elizabeth line', 'London Overground', 'DLR', 'Central', 'Victoria'];
     const gone = want.filter(n => !have.has(n));
-    const nr = lines.features.find(f => f.properties.mode === 'national-rail');
+    const nr = lines.features.filter(f => f.properties.mode === 'national-rail');
     $('#lineNote').textContent = gone.length
       ? `线路层缺 ${gone.join('、')}。`
-      : `${have.size - (nr ? 1 : 0)} 条 TfL 线路，实际轨道线形；Overground 按一条橙线画，不拆六条。`
-        + (nr ? ' 深蓝是国铁：Southeastern、Thameslink、Southern、South Western、'
-              + 'Greater Anglia、c2c 等共用一个颜色。地铁色是伦敦人脑子里有的，'
-              + '火车线没有，所以不拆。南伦敦大片区域没有地铁，火车就是通勤。' : '');
+      : `${have.size - nr.length} 条 TfL 线路，实际轨道线形；Overground 按一条橙线画，不拆六条。`
+        + (nr.length ? ' 虚线是国铁，按运营商分色（近似各家品牌色），可单独勾选。'
+              + '用虚线而不是换色系来区分：地铁已经把整个色环占满了。'
+              + '共线路段显示叠在最上面的那家，想看某一家单独勾它。' : '');
     $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.
