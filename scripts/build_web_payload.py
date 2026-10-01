@@ -204,6 +204,15 @@ def main():
         names.update(o["developers"])
         fetched.append(o["fetched"])
         devs += [d for d in o["developments"] if d["dev"] != "barratt"]
+    # Door-to-door minutes to Green Park at the weekday morning peak, from TfL's
+    # planner (fetch_commute.py), joined by coordinates.
+    cm = RAW / "commute.json"
+    if cm.exists():
+        c = json.loads(cm.read_text())
+        for d in devs:
+            g = c.get(f"{d['lat']:.5f},{d['lon']:.5f}")
+            if g:
+                d["gp"] = g
     if devs:
         (WEB / "devs.json").write_text(json.dumps(
             {"fetched": min(fetched), "developers": names, "developments": devs},

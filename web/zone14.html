@@ -638,7 +638,8 @@ function devFC(){
     .filter(([d]) => srcOn(d.dev) && (state.soon || d.status !== 'coming'))
     .map(([d, i]) => ({type:'Feature', geometry:{type:'Point', coordinates:[d.lon, d.lat]},
       properties:{i, icon:'dev-' + d.dev + (d.status === 'coming' ? '-soon' : ''), color:devStyle(d.dev).c,
-        label:d.name + '\n' + (d.status === 'coming' ? '即将开售' : d.from ? kPrice(d.from) + ' 起' : '')}}))};
+        label:d.name + '\n' + [d.status === 'coming' ? '即将开售' : d.from ? kPrice(d.from) + ' 起' : '',
+                               d.gp ? 'Green Park ' + d.gp.min + ' 分' : ''].filter(Boolean).join(' · ')}}))};
 }
 // The source list: the two hand-built layers first, then one row per developer.
 function buildHomeSrc(){
@@ -707,6 +708,8 @@ function selectDev(d){
       <dt>户型</dt><dd>${d.summary || '—'}</dd>
       <dt>挂牌区间</dt><dd>${d.from ? money(d.from) + (d.to ? ' – ' + money(d.to) : ' 起') : '<span class="na">未公布</span>'}</dd>
       ${d.ready ? `<dt>交房</dt><dd>${d.ready}</dd>` : ''}
+      ${d.gp ? `<dt>到 Green Park</dt><dd><b>${d.gp.min} 分钟</b> · ${d.gp.changes ? d.gp.changes + ' 次换乘' : '直达'}
+        <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:30 出发</div></dd>` : ''}
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
         .map(([b, v]) => BEDS(+b) + ' ' + kPrice(Math.min(...v))).join(' · ')}</dd>` : ''}
     </dl>
