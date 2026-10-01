@@ -98,7 +98,14 @@ label.chk input{accent-color:var(--signal)}
 #railOps input{accent-color:var(--signal);flex:0 0 auto;margin:0}
 #railOps s{flex:0 0 15px;height:0;border-top:3px dashed currentColor;text-decoration:none}
 #railOps span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
-#railBlock.off{opacity:.4;pointer-events:none}
+#railBlock.off,#homeBlock.off{opacity:.4;pointer-events:none}
+#homeSrc{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+#homeSrc label{display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;min-width:0}
+#homeSrc input{accent-color:var(--signal);flex:0 0 auto;margin:0}
+#homeSrc img{flex:0 0 18px;width:18px;height:18px}
+#homeSrc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+#homeSrc em{font-style:normal;color:var(--muted);font-size:10.5px;margin-left:auto;padding-left:4px}
+#homeBlock .seg button{padding:3px 7px;font-size:11px}
 #railBlock .seg button{padding:3px 7px;font-size:11px}
 #railStnRow{font-size:12px;margin-top:2px}
 
@@ -257,9 +264,7 @@ label.chk input{accent-color:var(--signal)}
       <label class="chk"><input type="checkbox" id="lyStn" checked> 车站</label>
       <label class="chk"><input type="checkbox" id="lyPrem" checked> Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="lyMkt"> 所有超市（放大后）</label>
-      <label class="chk"><input type="checkbox" id="lySch" checked> 候选楼盘</label>
-      <label class="chk"><input type="checkbox" id="lyLst" checked> 在售房源</label>
-      <label class="chk"><input type="checkbox" id="lyBar" checked> Barratt 新盘</label>
+      <label class="chk"><input type="checkbox" id="lyHome" checked> 楼盘与房源</label>
     </div>
 
     <div class="block" id="railBlock">
@@ -267,6 +272,13 @@ label.chk input{accent-color:var(--signal)}
       <div id="railOps"></div>
       <label class="chk" id="railStnRow"><input type="checkbox" id="railStn"> 车站列表也只看这几家</label>
       <div class="seg"><button id="railAll" type="button">全选</button><button id="railNone" type="button">全不选</button></div>
+    </div>
+
+    <div class="block" id="homeBlock">
+      <div class="lbl">楼盘与房源</div>
+      <div id="homeSrc"></div>
+      <label class="chk"><input type="checkbox" id="homeSoon" checked> 显示即将开售</label>
+      <div class="seg"><button id="homeAll" type="button">全选</button><button id="homeNone" type="button">全不选</button></div>
     </div>
 
     <div class="block">
@@ -351,7 +363,7 @@ const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
 let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'br', ready = false;
-let LGROUPS = [], SC = [], mode = 'station', RAIL_ON = null, BAR = null;
+let LGROUPS = [], SC = [], mode = 'station', RAIL_ON = null, DEV = null, SRC_ON = null;
 
 /* ---------- National Rail operators ---------- */
 // A track carrying four companies is four features, one per company, so a
@@ -448,7 +460,7 @@ const METRIC = {
 
 const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
                resale:true, op:0.30, railStn:false,
-               layers:{line:true, stn:true, prem:true, mkt:false, sch:true, lst:true, bar:true},
+               layers:{line:true, stn:true, prem:true, mkt:false, home:true},
                w:{safe:1, cheap:1, conv:1}};
 
 /* ---------- scoring ---------- */
@@ -573,21 +585,93 @@ function groupListings(rows){
   });
 }
 function listingFC(){
-  return {type:'FeatureCollection', features:(state.layers.lst ? LGROUPS : []).map(g => ({
+  return {type:'FeatureCollection', features:(srcOn('lst') ? LGROUPS : []).map(g => ({
     type:'Feature', geometry:{type:'Point', coordinates:[g.lon, g.lat]},
     properties:{i:g.i, n:g.rows.length, label:String(g.rows.length)}}))};
 }
 
-// Barratt London's developments, from its own site: asking prices of the homes
-// it has released, not achieved prices. Shown against what flats near the same
-// station actually sold for, because that gap is the new-build premium a buyer
-// pays on day one and does not get back on resale.
+// Developers' own sites: asking prices of what they are selling or about to, read
+// off their pages on the day of the fetch -- not achieved prices. Each developer
+// gets its own badge (colour, shape, initials) rather than a brand logo: the
+// marks are ours, so nothing on the map pretends to be a developer's own.
+const DEV_STYLE = {
+  barratt:      {m:'B',  c:'#14325c', sh:'circle'},
+  berkeley:     {m:'Bk', c:'#1f5e45', sh:'square'},
+  ballymore:    {m:'Bm', c:'#6b2d8c', sh:'hex'},
+  taylorwimpey: {m:'TW', c:'#0e7c86', sh:'square'},
+  bellway:      {m:'Bw', c:'#8c1c2b', sh:'diamond'},
+  londonsquare: {m:'LS', c:'#9a7424', sh:'square'},
+  mountanvil:   {m:'MA', c:'#2b2b2b', sh:'oct'},
+  galliard:     {m:'G',  c:'#c4561d', sh:'circle'},
+  fairview:     {m:'Fv', c:'#2f64b0', sh:'hex'},
+  redrow:       {m:'R',  c:'#b3122e', sh:'diamond'},
+};
+const devStyle = k => DEV_STYLE[k] || {m:k.slice(0, 2), c:'#555', sh:'circle'};
+// One badge, drawn on a canvas at twice the size it is shown. Filled for on
+// sale; white with a coloured rim for coming soon.
+function badge(k, soon, px = 52){
+  const st = devStyle(k), cv = document.createElement('canvas');
+  cv.width = cv.height = px;
+  const g = cv.getContext('2d'), c = px / 2, r = px / 2 - 3;
+  g.beginPath();
+  const poly = (n, rot) => { for (let i = 0; i < n; i++){
+    const a = rot + i * 2 * Math.PI / n; g[i ? 'lineTo' : 'moveTo'](c + r * Math.cos(a), c + r * Math.sin(a)); } g.closePath(); };
+  if (st.sh === 'circle') g.arc(c, c, r, 0, 2 * Math.PI);
+  else if (st.sh === 'square') { const q = r * 0.9, rr = px * 0.12;
+    g.roundRect ? g.roundRect(c - q, c - q, 2 * q, 2 * q, rr) : g.rect(c - q, c - q, 2 * q, 2 * q); }
+  else if (st.sh === 'hex') poly(6, Math.PI / 6);
+  else if (st.sh === 'diamond') poly(4, 0);
+  else poly(8, Math.PI / 8);
+  g.fillStyle = soon ? '#ffffff' : st.c; g.fill();
+  g.lineWidth = px * 0.075; g.strokeStyle = soon ? st.c : '#ffffff'; g.stroke();
+  g.fillStyle = soon ? st.c : '#ffffff';
+  g.font = `700 ${st.m.length > 1 ? px * 0.36 : px * 0.46}px Archivo, "Helvetica Neue", Arial, sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(st.m, c, c + px * 0.03);
+  return cv;
+}
 const kPrice = v => v >= 1e6 ? '£' + (v / 1e6).toFixed(2) + 'm' : '£' + Math.round(v / 1e3) + 'k';
-function barrattFC(){
-  return {type:'FeatureCollection', features:(BAR ? BAR.developments : []).map((d, i) => ({
-    type:'Feature', geometry:{type:'Point', coordinates:[d.lon, d.lat]},
-    properties:{i, soon:d.status === 'coming' ? 1 : 0,
-      label:d.name + '\n' + (d.status === 'coming' ? '即将开售' : d.from ? kPrice(d.from) + ' 起' : '登记意向')}}))};
+const srcOn = k => state.layers.home && (!SRC_ON || SRC_ON.has(k));
+function devFC(){
+  return {type:'FeatureCollection', features:(DEV ? DEV.developments : [])
+    .map((d, i) => [d, i])
+    .filter(([d]) => srcOn(d.dev) && (state.soon || d.status !== 'coming'))
+    .map(([d, i]) => ({type:'Feature', geometry:{type:'Point', coordinates:[d.lon, d.lat]},
+      properties:{i, icon:'dev-' + d.dev + (d.status === 'coming' ? '-soon' : ''), color:devStyle(d.dev).c,
+        label:d.name + '\n' + (d.status === 'coming' ? '即将开售' : d.from ? kPrice(d.from) + ' 起' : '')}}))};
+}
+// The source list: the two hand-built layers first, then one row per developer.
+function buildHomeSrc(){
+  const rows = [
+    {k:'lst', name:'候选房源', n:LGROUPS.reduce((a, g) => a + g.rows.length, 0),
+     img:(() => { const cv = document.createElement('canvas'); cv.width = cv.height = 36;
+       const g = cv.getContext('2d'); g.beginPath(); g.arc(18, 18, 15, 0, 7); g.fillStyle = '#c2402a'; g.fill();
+       g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); g.fillStyle = '#fff';
+       g.font = '700 15px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('3', 18, 19); return cv; })()},
+    {k:'sch', name:'二手楼盘', n:SC.length,
+     img:(() => { const cv = document.createElement('canvas'); cv.width = cv.height = 36;
+       const g = cv.getContext('2d'); g.beginPath(); g.arc(18, 18, 9, 0, 7); g.fillStyle = '#fff'; g.fill();
+       g.lineWidth = 3; g.strokeStyle = '#3d5a74'; g.stroke(); return cv; })()},
+  ];
+  if (DEV){
+    const by = {};
+    for (const d of DEV.developments) by[d.dev] = (by[d.dev] || 0) + 1;
+    for (const k of Object.keys(by).sort((a, b) => by[b] - by[a]))
+      rows.push({k, name:({barratt:'Barratt', londonsquare:'London Sq.'})[k] || DEV.developers[k] || k,
+                 n:by[k], img:badge(k, false, 36)});
+  }
+  SRC_ON = new Set(rows.map(r => r.k));
+  $('#homeSrc').innerHTML = rows.map(r =>
+    `<label title="${r.name} · ${r.n}"><input type="checkbox" checked data-k="${r.k}">`
+    + `<img alt="" src="${r.img.toDataURL()}"><span>${r.name}</span><em>${r.n}</em></label>`).join('');
+  const boxes = () => [...$('#homeSrc').querySelectorAll('input')];
+  $('#homeSrc').addEventListener('input', () => {
+    SRC_ON = new Set(boxes().filter(b => b.checked).map(b => b.dataset.k));
+    draw();
+  });
+  const setAll = on => { boxes().forEach(b => b.checked = on); $('#homeSrc').dispatchEvent(new Event('input')); };
+  $('#homeAll').onclick = () => setAll(true);
+  $('#homeNone').onclick = () => setAll(false);
 }
 function nearestStation(x, y){
   let best = null, bd = Infinity;
@@ -598,7 +682,7 @@ function nearestStation(x, y){
   }
   return best && {s:best, m:Math.round(bd)};
 }
-function selectBarratt(d){
+function selectDev(d){
   if (!d) return;
   SEL = null;
   MAP.easeTo({center:[d.lon, d.lat], zoom:Math.max(MAP.getZoom(), 14.5), duration:600});
@@ -612,12 +696,13 @@ function selectBarratt(d){
   const ns = nearestStation(d.lon, d.lat), s = ns && ns.s;
   const BEDS = b => b === 0 ? 'Studio' : b + ' 房';
   const byBeds = {};
-  for (const p of d.plots) (byBeds[p.beds] ||= []).push(p.price);
+  for (const p of d.plots || []) (byBeds[p.beds] ||= []).push(p.price);
   const ref = s && s.price;
   el.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
-    <h2>${d.name}<span class="chip${d.status === 'coming' ? ' soon' : ''}">${
+    <h2>${d.name}<span class="chip${d.status === 'coming' ? ' soon' : ''}" style="${
+      d.status === 'coming' ? `color:${devStyle(d.dev).c};border-color:${devStyle(d.dev).c}` : `background:${devStyle(d.dev).c}`}">${
       d.status === 'coming' ? '即将开售' : d.status === 'selling' ? '在售' : '登记意向'}</span></h2>
-    <div class="where">Barratt London · ${d.address || ''}</div>
+    <div class="where">${DEV.developers[d.dev] || d.dev} · ${d.address || d.postcode || ''}</div>
     <dl class="kv">
       <dt>户型</dt><dd>${d.summary || '—'}</dd>
       <dt>挂牌区间</dt><dd>${d.from ? money(d.from) + (d.to ? ' – ' + money(d.to) : ' 起') : '<span class="na">未公布</span>'}</dd>
@@ -625,11 +710,12 @@ function selectBarratt(d){
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
         .map(([b, v]) => BEDS(+b) + ' ' + kPrice(Math.min(...v))).join(' · ')}</dd>` : ''}
     </dl>
-    ${d.plots.length ? `<div class="sect">已放出的房源 · ${d.plots.length} 套</div>
+    ${(d.plots || []).length ? `<div class="sect">已放出的房源 · ${d.plots.length} 套</div>
     <table class="ptab">${d.plots.map(p => `<tr${p.price <= 550000 ? ' class="lo"' : ''}>
       <td>${BEDS(p.beds)}</td><td class="m">${p.bld}</td><td class="m">${p.floor != null ? p.floor + ' 层' : ''}</td>
       <td class="n">${money(p.price)}</td></tr>`).join('')}</table>`
-      : `<p class="caveat">还没有放出具体房源，只能登记意向。</p>`}
+      : d.status === 'coming' ? `<p class="caveat">还没有放出具体房源，只能登记意向。</p>`
+      : `<p class="caveat">这家官网不逐套列房源，具体单位和价格要问售楼处。</p>`}
     ${s ? `<div class="sect">最近车站 · ${s.n} · 步行约 ${ns.m} 米 · Zone ${s.z}</div>
     <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('方便', s.conv)}</div>
     <dl class="kv">
@@ -637,9 +723,12 @@ function selectBarratt(d){
       ${ref && d.from ? `<dt>起价比中位成交</dt><dd>${((d.from / ref - 1) * 100).toFixed(0)}%</dd>` : ''}
       <dt>住宅入室（估算）/ 千户 / 年</dt><dd>${s.br == null ? '—' : s.br.toFixed(0)}<span class="na"> · 伦敦 10</span></dd>
     </dl>` : ''}
-    <a href="${d.url}" target="_blank" rel="noopener">在 Barratt 官网打开 →</a>
-    <p class="caveat">挂牌价，抓取于 ${BAR.fetched}，来自 Barratt London 官网，可能已售出或改价；官网每次只列一部分在售单位。
-      绿色 = £550k 预算以内。中位成交是车站周边所有公寓（新旧混合）的 Land Registry 成交价，
+    <a href="${d.url}" target="_blank" rel="noopener">在 ${DEV.developers[d.dev] || ''} 官网打开 →</a>
+    <p class="caveat">挂牌价，抓取于 ${DEV.fetched}，从开发商官网页面读出，可能已售出或改价${
+      d.plots ? '；官网每次只列一部分在售单位'
+      : d.approx ? `。<b>位置只到邮区 ${d.postcode} 的中心</b>：官网没给地址，误差可能一两公里，上面的车站和治安数据只能当参考`
+      : '；位置按页面上的邮编定位，精度到邮编（几十米）'}。${(d.plots || []).length ? ' 绿色 = £550k 预算以内。' : ''}
+      中位成交是车站周边所有公寓（新旧混合）的 Land Registry 成交价，
       一房和两房混在一起，所以"起价比中位"只是量级参考。${ns && ns.m > 1200 ? ` 这个盘不在 Zone 1–4 的车站步行范围内：地图只收了 Zone 1–4 的车站，最近的一个在 ${(ns.m / 1000).toFixed(1)} 公里外，上面的车站数据只能当参考。` : ''}</p>`;
   el.querySelector('.close').onclick = () => {
     el.hidden = true;
@@ -683,7 +772,8 @@ function draw(){
   const keepS = S.filter(passes), keepC = SC.filter(passesScheme);
   if (ready){
     MAP.getSource('stations').setData(stationFC(state.layers.stn ? keepS : []));
-    MAP.getSource('schemes').setData(schemeFC(state.layers.sch ? keepC : []));
+    MAP.getSource('schemes').setData(schemeFC(srcOn('sch') ? keepC : []));
+    MAP.getSource('devs').setData(devFC());
     MAP.getSource('listings').setData(listingFC());
   }
   if (mode === 'station') drawStations(keepS); else drawSchemes(keepC);
@@ -954,8 +1044,8 @@ function wire(){
     state.layers = {line:$('#lyLine').checked, rail:$('#lyRail').checked,
                     stn:$('#lyStn').checked,
                     prem:$('#lyPrem').checked,
-                    mkt:$('#lyMkt').checked, sch:$('#lySch').checked,
-                    lst:$('#lyLst').checked, bar:$('#lyBar').checked};
+                    mkt:$('#lyMkt').checked, home:$('#lyHome').checked};
+    state.soon = $('#homeSoon').checked;
     state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
     $('#priceV').textContent = '≤ £' + state.price + 'k';
     $('#crimeV').textContent = state.crime >= 200 ? '不限' : '≤ ' + state.crime;
@@ -966,16 +1056,16 @@ function wire(){
                               ['rail-path', state.layers.rail], ['rail-casing', state.layers.rail],
                               ['grocer-dot', state.layers.prem], ['grocer-label', state.layers.prem],
                               ['market-dot', state.layers.mkt],
-                              ['barratt-dot', state.layers.bar], ['barratt-b', state.layers.bar],
-                              ['barratt-label', state.layers.bar],
+                              ['dev-icon', state.layers.home], ['dev-label', state.layers.home],
                               ['stations-label', state.layers.stn]])
         MAP.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
       $('#railBlock').classList.toggle('off', !state.layers.rail);
+      $('#homeBlock').classList.toggle('off', !state.layers.home);
     }
     draw();
   };
   for (const id of ['price','crime','prem','multi','resale','op',
-                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lySch','lyLst','lyBar','railStn',
+                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','homeSoon','railStn',
                     'wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', sync);
   sync();
@@ -1073,7 +1163,7 @@ async function boot(){
   const opt = {cache:'no-cache'};
   const j = p => fetch(p, opt).then(r => r.json());
   note('底图 14.7 MB…');
-  const [buffer, lsoa, bor, stations, amen, breaks, schemes, lines, short, barratt] =
+  const [buffer, lsoa, bor, stations, amen, breaks, schemes, lines, short, devs] =
     await Promise.all([
       fetch('data/london.pmtiles.wasm', opt).then(r => r.arrayBuffer()),
       j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
@@ -1081,8 +1171,8 @@ async function boot(){
       j('data/schemes.json').catch(() => []),
       j('data/lines.geojson').catch(() => ({type:'FeatureCollection', features:[]})),
       j('data/shortlist.json').catch(() => null),
-      j('data/barratt.json').catch(() => null)]);
-  S = stations; AM = amen; BREAKS = breaks; SHORT = short; BAR = barratt;
+      j('data/devs.json').catch(() => null)]);
+  S = stations; AM = amen; BREAKS = breaks; SHORT = short; DEV = devs;
   SC = schemes; SC.forEach((x, i) => x.i = i);
   LGROUPS = SHORT ? groupListings(SHORT.listings) : [];
   score(); scoreSchemes();
@@ -1223,30 +1313,31 @@ async function boot(){
               'text-allow-overlap':true},
       paint:{'text-color':'#ffffff'}});
 
-    MAP.addSource('barratt', {type:'geojson', data:barrattFC()});
-    MAP.addLayer({id:'barratt-dot', type:'circle', source:'barratt',
-      paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 9, 6, 13, 10, 16, 13],
-             'circle-color':['case', ['==', ['get','soon'], 1], '#ffffff', '#14325c'],
-             'circle-stroke-color':['case', ['==', ['get','soon'], 1], '#14325c', '#ffffff'],
-             'circle-stroke-width':2.2, 'circle-opacity':0.97}});
-    MAP.addLayer({id:'barratt-b', type:'symbol', source:'barratt',
-      layout:{'text-field':'B', 'text-font':['NotoSansMedium'], 'text-allow-overlap':true,
-              'text-size':['interpolate', ['linear'], ['zoom'], 9, 8, 13, 12, 16, 15]},
-      paint:{'text-color':['case', ['==', ['get','soon'], 1], '#14325c', '#ffffff']}});
-    MAP.addLayer({id:'barratt-label', type:'symbol', source:'barratt', minzoom:12,
+    // Badges are drawn once per developer and status and registered as images.
+    for (const k of new Set([...Object.keys(DEV_STYLE), ...(DEV ? DEV.developments.map(d => d.dev) : [])]))
+      for (const soon of [false, true]){
+        const cv = badge(k, soon);
+        MAP.addImage('dev-' + k + (soon ? '-soon' : ''),
+          cv.getContext('2d').getImageData(0, 0, cv.width, cv.height), {pixelRatio:2});
+      }
+    MAP.addSource('devs', {type:'geojson', data:devFC()});
+    MAP.addLayer({id:'dev-icon', type:'symbol', source:'devs',
+      layout:{'icon-image':['get','icon'], 'icon-allow-overlap':true, 'icon-ignore-placement':true,
+              'icon-size':['interpolate', ['linear'], ['zoom'], 9, 0.62, 13, 0.9, 16, 1.1]}});
+    MAP.addLayer({id:'dev-label', type:'symbol', source:'devs', minzoom:12.5,
       layout:{'text-field':['get','label'], 'text-font':['NotoSansMedium'], 'text-size':11.5,
-              'text-anchor':'left', 'text-offset':[1.3, 0], 'text-justify':'left'},
-      paint:{'text-color':'#14325c', 'text-halo-color':'#ffffff', 'text-halo-width':1.6}});
+              'text-anchor':'left', 'text-offset':[1.4, 0], 'text-justify':'left', 'text-optional':true},
+      paint:{'text-color':['get','color'], 'text-halo-color':'#ffffff', 'text-halo-width':1.6}});
 
     MAP.on('click', 'stations-dot', e => select(S.find(s => s.n === e.features[0].properties.n)));
     MAP.on('click', 'listing-dot', e => selectGroup(LGROUPS[e.features[0].properties.i]));
     MAP.on('click', 'scheme-dot', e => selectScheme(SC[e.features[0].properties.i]));
-    MAP.on('click', 'barratt-dot', e => selectBarratt(BAR.developments[e.features[0].properties.i]));
+    MAP.on('click', 'dev-icon', e => selectDev(DEV.developments[e.features[0].properties.i]));
     for (const id of ['scheme-dot', 'grocer-dot', 'market-dot']){
       MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
       MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
     }
-    for (const id of ['listing-dot', 'listing-count', 'barratt-dot']){
+    for (const id of ['listing-dot', 'listing-count', 'dev-icon']){
       MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
       MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
     }
@@ -1261,6 +1352,7 @@ async function boot(){
 
     ready = true;
     buildRailOps(lines);
+    buildHomeSrc();
     drawLegend(); wire();
     const have = new Set(lines.features.map(f => f.properties.name));
     const want = ['Elizabeth line', 'London Overground', 'DLR', 'Central', 'Victoria'];
@@ -1272,7 +1364,7 @@ async function boot(){
         + (nr.length ? ' 虚线是国铁，按运营商分色（近似各家品牌色），可单独勾选。'
               + '用虚线而不是换色系来区分：地铁已经把整个色环占满了。'
               + '共线路段显示叠在最上面的那家，想看某一家单独勾它。' : '');
-    $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售${BAR ? ' · ' + BAR.developments.length + ' Barratt' : ''}`;
+    $('#stamp').textContent = `${S.length} 站 · ${SC.length} 楼盘 · ${LGROUPS.reduce((a,g)=>a+g.rows.length,0)} 在售${DEV ? ' · ' + DEV.developments.length + ' 新盘' : ''}`;
     $('#loading').remove();
     // Open on a station that makes the point: Zone 3, on the resale shortlist.
     select(S.find(s => s.n === 'Kidbrooke') || S[0]);

@@ -186,13 +186,32 @@ def main():
     print(f"{len(rows):,} Zone 1-4 schemes -> schemes.json "
           f"({(WEB / 'schemes.json').stat().st_size/1e3:.0f} KB)")
 
-    # Barratt London's own sites, asking prices as listed on the day of the fetch
-    # (scripts/fetch_barratt.py). Passed through as is: eleven rows.
+    # Developers' own sites: what is selling or coming soon, at asking prices read
+    # off the page on the day of the fetch. Barratt has its own fetcher because its
+    # pages list individual plots (fetch_barratt.py); the rest come from one
+    # generic reader (fetch_developers.py). Merged here into one file the page
+    # draws as one layer.
+    devs, names, fetched = [], {}, []
     bt = RAW / "barratt.json"
     if bt.exists():
-        (WEB / "barratt.json").write_bytes(bt.read_bytes())
-        n = json.loads(bt.read_text())["developments"]
-        print(f"barratt.json: {len(n)} developments, {sum(len(d['plots']) for d in n)} homes listed")
+        b = json.loads(bt.read_text())
+        names["barratt"] = "Barratt London"
+        fetched.append(b["fetched"])
+        devs += [dict(d, dev="barratt") for d in b["developments"]]
+    ot = RAW / "developers.json"
+    if ot.exists():
+        o = json.loads(ot.read_text())
+        names.update(o["developers"])
+        fetched.append(o["fetched"])
+        devs += [d for d in o["developments"] if d["dev"] != "barratt"]
+    if devs:
+        (WEB / "devs.json").write_text(json.dumps(
+            {"fetched": min(fetched), "developers": names, "developments": devs},
+            ensure_ascii=False, separators=(",", ":")))
+        by = {}
+        for d in devs:
+            by[d["dev"]] = by.get(d["dev"], 0) + 1
+        print(f"devs.json: {len(devs)} developments  " + ", ".join(f"{k} {n}" for k, n in by.items()))
 
     sl = PROC / "shortlist.json"
     if sl.exists():
