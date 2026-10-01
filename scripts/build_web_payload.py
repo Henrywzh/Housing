@@ -186,6 +186,14 @@ def main():
     print(f"{len(rows):,} Zone 1-4 schemes -> schemes.json "
           f"({(WEB / 'schemes.json').stat().st_size/1e3:.0f} KB)")
 
+    # Barratt London's own sites, asking prices as listed on the day of the fetch
+    # (scripts/fetch_barratt.py). Passed through as is: eleven rows.
+    bt = RAW / "barratt.json"
+    if bt.exists():
+        (WEB / "barratt.json").write_bytes(bt.read_bytes())
+        n = json.loads(bt.read_text())["developments"]
+        print(f"barratt.json: {len(n)} developments, {sum(len(d['plots']) for d in n)} homes listed")
+
     sl = PROC / "shortlist.json"
     if sl.exists():
         (WEB / "shortlist.json").write_bytes(sl.read_bytes())
