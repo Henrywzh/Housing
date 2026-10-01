@@ -22,6 +22,16 @@ dest = ROOT / "london_housing_map.html"
 dest.write_text(out)
 print(f"{dest}  {dest.stat().st_size/1e6:.2f} MB")
 
+# The same page as a supporting file of the Zone 1-4 map, which shows it under
+# its own tab. A published page gets a document skeleton wrapped round it; a
+# supporting file is served as-is, so it brings its own or renders in quirks mode.
+web = ROOT / "web" / "data" / "trend.html"
+web.parent.mkdir(parents=True, exist_ok=True)
+web.write_text('<!doctype html>\n<html lang="zh"><head>\n'
+               '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+               + out + "\n</html>\n")
+print(f"{web}  {web.stat().st_size/1e6:.2f} MB")
+
 # --- guard: every metric the UI offers must exist in the payload -------------
 import json, re
 data = json.loads(mapd)
