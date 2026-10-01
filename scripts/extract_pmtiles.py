@@ -24,8 +24,10 @@ import pmtiles  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CACHE = ROOT / "data" / "raw" / "basemap"
 BUILD = "https://build.protomaps.com/{date}.pmtiles"
-# Zone 1-4 stations span 51.375-51.638 N, 0.379 W - 0.121 E, plus walking room.
-BOUNDS = (-0.40, 51.355, 0.14, 51.655)
+# Zone 1-6 stations span 51.29-51.69 N, 0.51 W - 0.27 E (Heathrow to Upminster), plus walking room.
+BOUNDS = (-0.56, 51.28, 0.30, 51.70)
+FINER = {12: (-0.46, 51.33, 0.17, 51.68),    # z12: Zone 1-5 and most of 6
+         13: (-0.36, 51.40, 0.05, 51.62)}    # z13: Zone 1-4 and Harrow
 CENTER = (-0.10, 51.505, 11)
 
 
@@ -70,9 +72,20 @@ def keep_layers(raw, keep):
 
 
 # --------------------------------------------------------------------------- #
-def tiles_for(bounds, zmin, zmax):
-    w, s, e, n = bounds
+def tiles_for(bounds, zmin, zmax, finer=None):
+    """Tiles covering `bounds`, with smaller areas at the finest zooms.
+
+    `finer` maps a zoom to the bounds its tiles are kept for, from that zoom up.
+    The artifact host takes a binary file up to 15 MB and the last two zooms are
+    most of the bytes, so the outer ring (Zone 5-6) is carried at coarser zooms
+    only and MapLibre stretches them when you zoom past them.
+    """
+    cut = sorted((finer or {}).items())
     for z in range(zmin, zmax + 1):
+        w, s, e, n = bounds
+        for zf, bb in cut:
+            if z >= zf:
+                w, s, e, n = bb
         x0, y0 = pmtiles.lonlat_to_tile(w, n, z)
         x1, y1 = pmtiles.lonlat_to_tile(e, s, z)
         for x in range(x0, x1 + 1):
@@ -104,7 +117,7 @@ def main():
     print(f"source {url}\n  zooms {r.header['min_zoom']}-{r.header['max_zoom']}, "
           f"{r.header['addressed']:,} addressed tiles", flush=True)
 
-    want = list(tiles_for(BOUNDS, a.min_zoom, a.max_zoom))
+    want = list(tiles_for(BOUNDS, a.min_zoom, a.max_zoom, FINER))
     by_zoom = {}
     for z, _, _ in want:
         by_zoom[z] = by_zoom.get(z, 0) + 1

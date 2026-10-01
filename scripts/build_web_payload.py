@@ -19,6 +19,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, PROC = ROOT / "data" / "raw", ROOT / "data" / "processed"
 MAN = ROOT / "data" / "manual"
 WEB = ROOT / "web" / "data"
+MAX_ZONE = 6
 
 
 def num(x, nd=0):
@@ -32,7 +33,7 @@ def main():
 
     # --- stations -----------------------------------------------------------
     s = pd.read_csv(PROC / "stations.csv")
-    s = s[s["zone_min"] <= 4].copy()
+    s = s[s["zone_min"] <= MAX_ZONE].copy()
     out = []
     for r in s.itertuples():
         out.append({
@@ -51,8 +52,16 @@ def main():
             "he": num(getattr(r, "n_health_edu", None)),
             "prem": bool(getattr(r, "premium_grocer", False)),
         })
+    # Minutes to be at Green Park by 08:40 (fetch_commute.py), the 方便 score's input.
+    cmp = RAW / "commute_gp_0840.json"
+    gp = json.loads(cmp.read_text()) if cmp.exists() else {}
+    for o in out:
+        g = gp.get(f"{o['y']:.5f},{o['x']:.5f}")
+        if g:
+            o["gp"] = g
     (WEB / "stations.json").write_text(json.dumps(out, separators=(",", ":")))
-    print(f"{len(out)} Zone 1-4 stations -> stations.json "
+    stn = out                   # `out` is reused below
+    print(f"{len(out)} Zone 1-{MAX_ZONE} stations -> stations.json "
           f"({(WEB / 'stations.json').stat().st_size/1e3:.0f} KB)")
 
     # --- LSOA geometry with its values baked in ----------------------------
@@ -161,27 +170,36 @@ def main():
           f"({(WEB / 'lines.geojson').stat().st_size/1e3:.0f} KB)")
 
     sc = pd.read_csv(PROC / "schemes.csv")
-    lst_streets = set()
+    lst_pts = []
     slp = PROC / "shortlist.json"
     if slp.exists():
-        lst_streets = {(r["street"], r["development"])
-                       for r in json.loads(slp.read_text())["listings"] if r.get("street")}
+        lst_pts = [(r["street"].upper(), r["lat"], r["lon"])
+                   for r in json.loads(slp.read_text())["listings"]
+                   if r.get("street") and r.get("lat") is not None]
+    # A resale scheme's commute is its nearest station's plus the walk to it, at
+    # 80 m a minute -- not asked of TfL separately for 1,099 points.
+    st_gp = {o["n"]: o["gp"]["min"] for o in stn if o.get("gp")}
     rows = []
     for r in sc.itertuples():
         rows.append({
-            "s": r.street.title(), "sec": r.sector, "y": round(r.lat, 5), "x": round(r.lon, 5),
+            "s": r.label, "sec": r.sector, "pc": r.postcode, "st_name": r.street.title(), "y": round(r.lat, 5), "x": round(r.lon, 5),
             "st": r.station, "z": r.zone, "zm": int(r.zone_min), "d": int(r.station_m),
             "nn": int(r.n_new), "nr": int(r.n_resale),
             "f": r.first_new[:7], "l": (r.last_resale[:7] if isinstance(r.last_resale, str) else None),
             "rm": num(r.resale_median), "r25": num(r.resale_p25), "nm": num(r.new_median),
             "psf": num(r.psf), "gap": num(r.gap_pct, 1),
-            "ps": num(r.part_share_pct, 1), "pre": bool(r.pre_existing_stock),
+            "ps": num(r.part_share_pct, 1), "pre": bool(r.pre_existing_stock), "sh": bool(r.share_suspect),
             "home": num(r.home_per_1000, 1), "bh": num(r.burglary_per_1000_hh, 1),
             "br": num(r.burglary_resid_per_1000_hh, 1), "rs": num(r.residential_share),
             "vc": num(r.vehicle_per_1000_cars, 1), "vs": num(r.visitor_share, 1),
             "shop": int(r.n_shops), "food": int(r.n_food), "park": int(r.n_parks),
             "prem": bool(r.premium_grocer),
-            "has": any(r.street == a for a, _ in lst_streets)})
+            # A hand-collected listing counts only if it is on this scheme's street
+            # AND within 400 m: with the scheme now a postcode, a long street has
+            # many, and most of them are not where the listing is.
+            "has": any(r.street == a and abs(r.lat - la) < .0036 and abs(r.lon - lo) < .0058
+                       for a, la, lo in lst_pts),
+            "gp": (st_gp[r.station] + round(r.station_m / 80)) if r.station in st_gp else None})
     (WEB / "schemes.json").write_text(json.dumps(rows, separators=(",", ":")))
     print(f"{len(rows):,} Zone 1-4 schemes -> schemes.json "
           f"({(WEB / 'schemes.json').stat().st_size/1e3:.0f} KB)")
@@ -206,13 +224,10 @@ def main():
         devs += [d for d in o["developments"] if d["dev"] != "barratt"]
     # Door-to-door minutes to Green Park at the weekday morning peak, from TfL's
     # planner (fetch_commute.py), joined by coordinates.
-    cm = RAW / "commute.json"
-    if cm.exists():
-        c = json.loads(cm.read_text())
-        for d in devs:
-            g = c.get(f"{d['lat']:.5f},{d['lon']:.5f}")
-            if g:
-                d["gp"] = g
+    for d in devs:
+        g = gp.get(f"{d['lat']:.5f},{d['lon']:.5f}")
+        if g:
+            d["gp"] = g
     if devs:
         (WEB / "devs.json").write_text(json.dumps(
             {"fetched": min(fetched), "developers": names, "developments": devs},

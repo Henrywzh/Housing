@@ -215,7 +215,7 @@ label.chk input{accent-color:var(--signal)}
   <header>
     <h1>伦敦买房地图</h1>
     <nav id="tabs" role="tablist" aria-label="视图">
-      <button role="tab" data-tab="map" aria-selected="true">车站地图 · Zone 1–4</button>
+      <button role="tab" data-tab="map" aria-selected="true">车站地图 · Zone 1–6</button>
       <button role="tab" data-tab="trend" aria-selected="false">房价走势 · 1995–2026</button>
     </nav>
     <div class="sub" id="sub">每个车站步行 800 米内的治安、成交价与生活设施</div>
@@ -288,6 +288,8 @@ label.chk input{accent-color:var(--signal)}
         <button data-z="2" aria-pressed="true">2</button>
         <button data-z="3" aria-pressed="true">3</button>
         <button data-z="4" aria-pressed="true">4</button>
+        <button data-z="5" aria-pressed="true">5</button>
+        <button data-z="6" aria-pressed="true">6</button>
       </div>
       <div class="row"><span class="lbl">价格上限</span><span class="v" id="priceV">—</span></div>
       <input type="range" id="price" min="250" max="900" step="25" value="600" aria-label="价格上限">
@@ -302,7 +304,7 @@ label.chk input{accent-color:var(--signal)}
       <div class="lbl">排序权重</div>
       <div class="row"><span class="w">安全</span><input type="range" id="wSafe" min="0" max="3" step="1" value="1" aria-label="安全权重"></div>
       <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
-      <div class="row"><span class="w">方便</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="方便权重"></div>
+      <div class="row"><span class="w" title="8:40 到 Green Park 的通勤时间">通勤</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="通勤权重"></div>
     </div>
 
     </div><!-- /#controls -->
@@ -363,7 +365,7 @@ const fmtK = v => v == null ? '—' : '£' + Math.round(v/1000) + 'k';
 const pct = v => Math.round(v*100);
 
 let MAP, S = [], AM = {}, SHORT = null, BREAKS = {}, SEL = null, metric = 'br', ready = false;
-let LGROUPS = [], SC = [], mode = 'station', RAIL_ON = null, DEV = null, SRC_ON = null;
+let GP_RANK = () => null, LGROUPS = [], SC = [], mode = 'station', RAIL_ON = null, DEV = null, SRC_ON = null;
 
 /* ---------- National Rail operators ---------- */
 // A track carrying four companies is four features, one per company, so a
@@ -458,7 +460,7 @@ const METRIC = {
        n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。'},
 };
 
-const state = {zones:new Set([1,2,3,4]), price:600, crime:200, prem:false, multi:false,
+const state = {zones:new Set([1,2,3,4,5,6]), price:600, crime:200, prem:false, multi:false,
                resale:true, op:0.30, railStn:false,
                layers:{line:true, stn:true, prem:true, mkt:false, home:true},
                w:{safe:1, cheap:1, conv:1}};
@@ -476,33 +478,27 @@ function percentiles(vals){
 function score(){
   const pHome  = percentiles(S.map(s => s.home));
   const pPrice = percentiles(S.map(s => s.price));
-  const pLines = percentiles(S.map(s => s.L.length));
-  const pAmen  = percentiles(S.map(s => (s.shop||0) + (s.food||0)));
-  const pPark  = percentiles(S.map(s => s.park));
+  GP_RANK = percentiles(S.map(s => s.gp ? s.gp.min : null));
   for (const s of S){
     s.safe  = s.home  == null ? null : 1 - pHome(s.home);
     s.cheap = s.price == null ? null : 1 - pPrice(s.price);
-    // Convenience is four things the walk actually gives you: how many lines the
-    // station has, how central it is, what you can buy nearby, and whether there
-    // is anywhere green. Each enters as a rank among Zone 1-4 stations.
-    s.conv = (pLines(s.L.length) + (4 - s.zm)/3 + pAmen((s.shop||0)+(s.food||0))
-              + pPark(s.park||0)) / 4;
+    // 通勤 is the journey to work: minutes to be at Green Park by 08:40, door to
+    // door, by TfL's planner -- ranked among Zone 1-6 stations, shorter higher.
+    // It replaced a mix of line count, zone, shops and parks, which measured how
+    // central a station looks rather than how long the morning takes.
+    s.conv = s.gp ? 1 - GP_RANK(s.gp.min) : null;
   }
 }
 function scoreSchemes(){
   const pHome = percentiles(SC.map(x => x.home));
   const pPrice = percentiles(SC.map(x => x.rm ?? x.nm));
-  const pAmen = percentiles(SC.map(x => (x.shop||0) + (x.food||0)));
-  const pPark = percentiles(SC.map(x => x.park));
-  const pWalk = percentiles(SC.map(x => x.d));
   for (const x of SC){
     x.price = x.rm ?? x.nm;
     x.safe = x.home == null ? null : 1 - pHome(x.home);
     x.cheap = x.price == null ? null : 1 - pPrice(x.price);
-    // Convenience for a scheme is the walk to its station, the zone that station
-    // is in, and what else is inside the same 800m.
-    x.conv = ((1 - pWalk(x.d)) + (4 - x.zm)/3 + pAmen((x.shop||0)+(x.food||0))
-              + pPark(x.park||0)) / 4;
+    // Its station's commute plus the walk to the station, ranked on the stations'
+    // scale so a scheme and a station with the same minutes score the same.
+    x.conv = x.gp == null ? null : 1 - GP_RANK(x.gp);
   }
 }
 function passesScheme(x){
@@ -709,7 +705,7 @@ function selectDev(d){
       <dt>挂牌区间</dt><dd>${d.from ? money(d.from) + (d.to ? ' – ' + money(d.to) : ' 起') : '<span class="na">未公布</span>'}</dd>
       ${d.ready ? `<dt>交房</dt><dd>${d.ready}</dd>` : ''}
       ${d.gp ? `<dt>到 Green Park</dt><dd><b>${d.gp.min} 分钟</b> · ${d.gp.changes ? d.gp.changes + ' 次换乘' : '直达'}
-        <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:30 出发</div></dd>` : ''}
+        <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:40 前到达</div></dd>` : ''}
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
         .map(([b, v]) => BEDS(+b) + ' ' + kPrice(Math.min(...v))).join(' · ')}</dd>` : ''}
     </dl>
@@ -720,7 +716,7 @@ function selectDev(d){
       : d.status === 'coming' ? `<p class="caveat">还没有放出具体房源，只能登记意向。</p>`
       : `<p class="caveat">这家官网不逐套列房源，具体单位和价格要问售楼处。</p>`}
     ${s ? `<div class="sect">最近车站 · ${s.n} · 步行约 ${ns.m} 米 · Zone ${s.z}</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('方便', s.conv)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('通勤', d.gp ? 1 - GP_RANK(d.gp.min) : s.conv)}</div>
     <dl class="kv">
       <dt>车站 800 米内公寓中位成交</dt><dd>${ref ? money(ref) : '<span class="na">样本不足</span>'}</dd>
       ${ref && d.from ? `<dt>起价比中位成交</dt><dd>${((d.from / ref - 1) * 100).toFixed(0)}%</dd>` : ''}
@@ -732,7 +728,7 @@ function selectDev(d){
       : d.approx ? `。<b>位置只到邮区 ${d.postcode} 的中心</b>：官网没给地址，误差可能一两公里，上面的车站和治安数据只能当参考`
       : '；位置按页面上的邮编定位，精度到邮编（几十米）'}。${(d.plots || []).length ? ' 绿色 = £550k 预算以内。' : ''}
       中位成交是车站周边所有公寓（新旧混合）的 Land Registry 成交价，
-      一房和两房混在一起，所以"起价比中位"只是量级参考。${ns && ns.m > 1200 ? ` 这个盘不在 Zone 1–4 的车站步行范围内：地图只收了 Zone 1–4 的车站，最近的一个在 ${(ns.m / 1000).toFixed(1)} 公里外，上面的车站数据只能当参考。` : ''}</p>`;
+      一房和两房混在一起，所以"起价比中位"只是量级参考。${ns && ns.m > 1200 ? ` 这个盘不在任何 Zone 1–6 车站的步行范围内：地图只收了 Zone 1–6 的车站，最近的一个在 ${(ns.m / 1000).toFixed(1)} 公里外，上面的车站数据只能当参考。` : ''}</p>`;
   el.querySelector('.close').onclick = () => {
     el.hidden = true;
     $('#app').classList.remove('with-detail');
@@ -783,7 +779,7 @@ function draw(){
 }
 function drawStations(keep){
   const sorted = keep.slice().sort((a,b) => (composite(b) ?? -1) - (composite(a) ?? -1));
-  $('#count').textContent = `${sorted.length} 个车站符合条件 · 共 ${S.length} 个 Zone 1–4 车站`;
+  $('#count').textContent = `${sorted.length} 个车站符合条件 · 共 ${S.length} 个 Zone 1–6 车站`;
   $('#list').innerHTML = sorted.slice(0, 120).map(s => {
     const c = composite(s);
     return `<button class="item" data-k="s" data-n="${s.n}" aria-current="${s === SEL}">
@@ -792,7 +788,7 @@ function drawStations(keep){
       <span class="meta"><span class="pill z">Z${s.z}</span>
         <span>${fmtK(s.price)}</span>
         <span>犯罪 ${s.home == null ? '—' : s.home.toFixed(0)}</span>
-        <span>${s.L.length} 线</span>
+        <span>${s.gp ? 'GP ' + s.gp.min + '′' : s.L.length + ' 线'}</span>
         ${s.prem ? '<span class="pill w">Waitrose/M&amp;S</span>' : ''}</span>
     </button>`;
   }).join('') || empty();
@@ -800,7 +796,7 @@ function drawStations(keep){
 }
 function drawSchemes(keep){
   const sorted = keep.slice().sort((a,b) => (composite(b) ?? -1) - (composite(a) ?? -1));
-  $('#count').textContent = `${sorted.length} 个楼盘符合条件 · 共 ${SC.length} 个 Zone 1–4 新盘`;
+  $('#count').textContent = `${sorted.length} 个楼盘符合条件 · 共 ${SC.length} 个新盘（一个邮编一个盘）`;
   $('#list').innerHTML = sorted.slice(0, 150).map(x => {
     const c = composite(x);
     return `<button class="item" data-k="c" data-n="${x.i}">
@@ -810,7 +806,9 @@ function drawSchemes(keep){
         <span>${fmtK(x.price)}</span>
         <span>犯罪 ${x.home == null ? '—' : x.home.toFixed(0)}</span>
         <span>${x.st} ${x.d}m</span>
+        ${x.gp != null ? `<span>GP ${x.gp}′</span>` : ''}
         <span>${x.f.slice(0,4)} 交付</span>
+        <span>二手 ${x.nr} 笔${x.l ? ' · ' + x.l.slice(0,4) : ''}</span>
         ${x.has ? '<span class="pill w">有在售</span>' : ''}</span>
     </button>`;
   }).join('') || empty();
@@ -908,12 +906,13 @@ function selectScheme(x){
   d.scrollTop = 0;
   const warn = [];
   if (x.pre) warn.push('这条街在楼盘开卖前就有公寓成交，二手数字是混的，已隐去。');
+  if (x.sh) warn.push('二手成交价不到新房价的七成，很可能是共享产权的份额价，已从二手数字里隐去。');
   if (x.ps >= 15) warn.push(`该街 ${x.ps}% 的成交价低于自身上四分位的一半，多半是共享产权份额价，已从中位数里剔除。`);
   if (x.vs != null && x.vs >= 20) warn.push(`${x.vs.toFixed(0)}% 的报案是商店行窃或扒窃——周边有商场或景点，住户口径的犯罪数被商铺入室拉高了。`);
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${x.s}</h2>
-    <div class="where">${x.sec} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}</div>
-    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar('方便', x.conv)}</div>
+    <div class="where">${x.st_name} · ${x.pc} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}${x.gp != null ? ` · 8:40 到 Green Park 约 ${x.gp} 分钟` : ''}</div>
+    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar('通勤', x.conv)}</div>
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
       <dt>首批新房</dt><dd>${x.f}</dd>
@@ -936,7 +935,7 @@ function selectScheme(x){
       <dt>Waitrose / M&amp;S</dt><dd>${x.prem ? '有' : '<span class="na">无</span>'}</dd>
     </dl>
     ${warn.map(w => `<p class="caveat">⚠ ${w}</p>`).join('')}
-    <p class="caveat">楼盘 = 一条街 × 一个邮编段，这是 Price Paid 能给的最细粒度。二手 = 该街首批新房开卖之后的非新房成交。
+    <p class="caveat">楼盘 = 一个邮编（一栋楼或一个小区），这是 Price Paid 里成交之间唯一不变的地址单位。二手 = 该邮编首批新房开卖之后的非新房成交。
       这里只有已登记成交，没有挂牌价——挂牌那半边要手工收集，见「在售房源」。</p>`;
   d.querySelector('.close').onclick = () => {
     d.hidden = true;
@@ -964,7 +963,10 @@ function select(s){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${s.n}</h2>
     <div class="where">Zone ${s.z} · ${s.pop.toLocaleString()} 人住在步行 800 米内</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('方便', s.conv)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('通勤', s.conv)}</div>
+    ${s.gp ? `<div class="sect">通勤 · 8:40 到 Green Park</div>
+    <dl class="kv"><dt>门到门</dt><dd><b>${s.gp.min} 分钟</b> · ${s.gp.changes ? s.gp.changes + ' 次换乘' : '直达'}</dd>
+      <dt>路线</dt><dd>${s.gp.route || '步行'}</dd></dl>` : ''}
     <div class="sect">价格 · Land Registry 2024 年起</div>
     <dl class="kv">
       <dt>公寓中位价</dt><dd>${s.price == null ? '<span class="na">样本不足</span>' : '£' + s.price.toLocaleString()}</dd>
@@ -1184,7 +1186,7 @@ async function boot(){
   MAP = new maplibregl.Map({
     container:'map', style:styleFor(buffer), center:[-0.09, 51.505], zoom:10.6,
     minZoom:9, maxZoom:17, attributionControl:{compact:true},
-    maxBounds:[[-0.46, 51.31], [0.20, 51.70]]});
+    maxBounds:[[-0.62, 51.26], [0.36, 51.74]]});
   MAP.on('error', e => {
     const msg = (e && e.error && e.error.message) || String(e);
     console.warn('map error:', msg);
