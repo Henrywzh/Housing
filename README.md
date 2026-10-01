@@ -4,6 +4,12 @@ Interactive choropleth of London house prices and private rents, plus a
 flat-by-flat cut of new-build vs existing stock that the published indices
 do not provide.
 
+**Live map: [伦敦买房地图](https://claude.ai/artifact/GhEmFXcVDZMsKWysFjbvyq)** —
+the Zone 1–4 station map (safety, price and amenities within an 800 m walk,
+National Rail by operator, new-build schemes, shortlisted listings) and, under
+the second tab, the borough price/rent history
+([open on that tab](https://claude.ai/artifact/GhEmFXcVDZMsKWysFjbvyq#trend)).
+
 ## Data sources (all official, all full history)
 
 | Source | Grain | From | Fetched by |
