@@ -33,6 +33,10 @@ TABLES = [
     ("NM_2072_1", "tenure", "c2021_tenure_9", "0,1001,1003,1004"),
     ("NM_2084_1", "quals", "c2021_hiqual_8", "0,6"),
     ("NM_2020_1", "age", "c2021_age_19", "0,6,7,8"),
+    # TS063 occupation (1 managers, 2 professionals, 3 associate professionals):
+    # who lives here and what they do, which is what a buyer or tenant pool is made of.
+    # Industry (TS060) is only published down to MSOA: see fetch_census_msoa.py.
+    ("NM_2080_1", "occ", "c2021_occ_10", "0,1,2,3"),
 ]
 URL = ("https://www.nomisweb.co.uk/api/v01/dataset/{ds}.data.csv"
        "?geography={lad}TYPE151&{dim}={cells}&measures=20100"

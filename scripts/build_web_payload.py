@@ -16,6 +16,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from osm_layers import load as load_osm, is_premium  # noqa: E402
 from nuisance import Nuisance  # noqa: E402
 from supply import Supply  # noqa: E402
+from demand import Demand  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, PROC = ROOT / "data" / "raw", ROOT / "data" / "processed"
@@ -65,6 +66,7 @@ def main():
     cw, ls = _mins("cw"), _mins("ls")
     nu = Nuisance()
     sp = Supply()
+    dm = Demand()
     for o in out:
         k = f"{o['y']:.5f},{o['x']:.5f}"
         g = gp.get(k)
@@ -76,6 +78,7 @@ def main():
             o["ls"] = ls[k]["min"]
         o["nu"] = nu.flags(o["y"], o["x"])
         o["sup"] = sp.at(o["y"], o["x"])
+        o["dm"] = dm.at(o["y"], o["x"])
     (WEB / "stations.json").write_text(json.dumps(out, separators=(",", ":")))
     stn = out                   # `out` is reused below
     print(f"{len(out)} Zone 1-{MAX_ZONE} stations -> stations.json "
@@ -256,7 +259,7 @@ def main():
             "gp": (st_gp[r.station] + round(r.station_m / 80)) if r.station in st_gp else None,
             "cw": (st_cw[r.station] + round(r.station_m / 80)) if r.station in st_cw else None,
             "ls": (st_ls[r.station] + round(r.station_m / 80)) if r.station in st_ls else None,
-            "nu": nu.flags(r.lat, r.lon), "sup": sp.at(r.lat, r.lon)})
+            "nu": nu.flags(r.lat, r.lon), "sup": sp.at(r.lat, r.lon), "dm": dm.at(r.lat, r.lon)})
     (WEB / "schemes.json").write_text(json.dumps(rows, separators=(",", ":")))
     print(f"{len(rows):,} Zone 1-4 schemes -> schemes.json "
           f"({(WEB / 'schemes.json').stat().st_size/1e3:.0f} KB)")
@@ -292,6 +295,7 @@ def main():
             d["ls"] = ls[k]["min"]
         d["nu"] = nu.flags(d["lat"], d["lon"])
         d["sup"] = sp.at(d["lat"], d["lon"])
+        d["dm"] = dm.at(d["lat"], d["lon"])
     if devs:
         (WEB / "devs.json").write_text(json.dumps(
             {"fetched": min(fetched), "developers": {**dev_names, **names}, "developments": devs},

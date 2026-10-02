@@ -357,6 +357,7 @@ label.chk input{accent-color:var(--signal)}
       <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
       <div class="row"><span class="w" title="8:40 到 Green Park 的通勤时间">通勤</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="通勤权重"></div>
       <div class="row"><span class="w" title="附近新房供给少为好；只在「出租·转手」口径里计入">供给</span><input type="range" id="wSup" min="0" max="3" step="1" value="1" aria-label="供给权重"></div>
+      <div class="row"><span class="w" title="1 公里内的居民职业与行业、2 公里内的就业人口；只在「出租·转手」口径里计入">需求</span><input type="range" id="wDem" min="0" max="3" step="1" value="1" aria-label="需求权重"></div>
     </div>
 
     </div><!-- /#controls -->
@@ -521,7 +522,7 @@ const METRIC = {
 const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
                unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,
                layers:{line:true, stn:true, prem:true, mkt:false, home:true},
-               w:{safe:1, cheap:1, conv:1, sup:1}, phase:'live', noNu:false};
+               w:{safe:1, cheap:1, conv:1, sup:1, dem:1}, phase:'live', noNu:false};
 
 /* ---------- scoring ---------- */
 function percentiles(vals){
@@ -543,7 +544,41 @@ const NU_LABEL = {prison:'监狱', waste:'垃圾场/污水厂', power:'发电厂
 const nuPen = o => Math.min(.3, .1 * ((o && o.nu) || []).length);
 const nuText = o => ((o && o.nu) || []).map(([k, m]) => `${NU_LABEL[k]} ${m >= 1000 ? (m / 1000).toFixed(1) + ' 公里' : m + ' 米'}`);
 const nuPills = o => nuText(o).map(t => `<span class="pill bad">⚠ ${t}</span>`).join('');
-let EMP_RANK = () => null, SUP_RANK = () => null;
+let EMP_RANK = () => null, SUP_RANK = () => null, DEM_R = {}, DEM_MED = {};
+/* Demand: who would rent or buy nearby. Four things, each ranked among all places and
+   averaged: jobs within 2 km (where the tenants work), the share of residents in
+   finance, professional services or ICT (the City / Canary Wharf / West End crowd),
+   the share in managerial or professional jobs (an income proxy), and the share aged
+   25-39 (renting and first-buying years). */
+const ftOf = d => (d && d.fi != null && d.tc != null) ? d.fi + d.tc : null;
+const DEM_PARTS = {jb:d => d.jb, ft:ftOf, pr:d => d.pr, yg:d => d.yg};
+function demInit(){
+  const all = [...S.map(s => s.dm), ...SC.map(x => x.dm)].filter(Boolean);
+  for (const [k, f] of Object.entries(DEM_PARTS)){
+    const v = all.map(f).filter(x => x != null).sort((a, b) => a - b);
+    DEM_MED[k] = v.length ? v[v.length >> 1] : null;
+    DEM_R[k] = percentiles(all.map(f));
+  }
+}
+const demScore = o => { if (!o.dm) return null;
+  const v = Object.entries(DEM_PARTS).map(([k, f]) => { const x = f(o.dm); return x == null ? null : DEM_R[k](x); }).filter(x => x != null);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+// Gross yield on an asking price: the borough's average flat rent, a year of it, over the price.
+const yieldOf = (o, price) => (o.dm && o.dm.rent && price) ? 12 * o.dm.rent / price * 100 : null;
+const demKv = (o, price) => { const d = o.dm; if (!d) return '';
+  const m = k => DEM_MED[k] != null ? `<span class="na"> · 中位 ${DEM_MED[k] % 1 ? DEM_MED[k].toFixed(1) : DEM_MED[k]}</span>` : '';
+  const y = yieldOf(o, price);
+  return `<dl class="kv">
+  <dt>2 公里内就业人口</dt><dd>${d.jb != null ? d.jb + ' 千' : '—'}${m('jb')}</dd>
+  <dt>居民在金融业</dt><dd>${d.fi != null ? d.fi + '%' : '—'}</dd>
+  <dt>居民在专业服务 / 信息通信</dt><dd>${d.tc != null ? d.tc + '%' : '—'}</dd>
+  <dt>管理 / 专业职业</dt><dd>${d.pr != null ? d.pr + '%' : '—'}${m('pr')}</dd>
+  <dt>本科及以上</dt><dd>${d.dg != null ? d.dg + '%' : '—'}</dd>
+  <dt>25–39 岁</dt><dd>${d.yg != null ? d.yg + '%' : '—'}${m('yg')}</dd>
+  <dt>私租住户</dt><dd>${d.rn != null ? d.rn + '%' : '—'}</dd>
+  ${d.rent ? `<dt>本区公寓平均租金</dt><dd>£${d.rent.toLocaleString()} / 月${d.rg != null ? '<span class="na"> · 一年 ' + (d.rg > 0 ? '+' : '') + d.rg + '%</span>' : ''}</dd>` : ''}
+  ${y != null ? `<dt>毛收益率（估）</dt><dd>${y.toFixed(1)}%<span class="na"> · 区平均租金 ÷ 本楼盘价格</span></dd>` : ''}</dl>
+  <p class="caveat" style="margin-top:2px">居民数据是 Census 2021、1 公里内（行业为 1.5 公里内的 MSOA）。就业人口是 2011 年按工作地统计的，仅作规模参照。租金是整个区的平均，不是这栋楼的；City of London 无数据。</p>`; };
 // Fewer new flats landing nearby is better for a flat that will be let or sold later.
 const supScore = o => (o.sup && o.sup.r != null) ? 1 - SUP_RANK(o.sup.r) : null;
 const supKv = (o, self) => { const u = o.sup; if (!u) return '';
@@ -575,6 +610,7 @@ function score(){
   GP_RANK = percentiles(S.map(s => s.gp ? s.gp.min : null));
   EMP_RANK = percentiles(S.map(s => best3(s.gp ? s.gp.min : null, s.cw, s.ls)));
   SUP_RANK = percentiles([...S.map(s => s.sup && s.sup.r), ...SC.map(x => x.sup && x.sup.r)]);
+  demInit();
   for (const s of S){
     s.safe  = s.home  == null ? null : 1 - pHome(s.home);
     s.cheap = s.price == null ? null : 1 - pPrice(s.price);
@@ -584,6 +620,7 @@ function score(){
     // central a station looks rather than how long the morning takes.
     s.conv = convOf(s.gp ? s.gp.min : null, s.cw, s.ls);
     s.supS = supScore(s);
+    s.demS = demScore(s);
   }
 }
 function scoreSchemes(){
@@ -597,6 +634,7 @@ function scoreSchemes(){
     // scale so a scheme and a station with the same minutes score the same.
     x.conv = convOf(x.gp, x.cw, x.ls);
     x.supS = supScore(x);
+    x.demS = demScore(x);
   }
 }
 /* ---------- the quick filter ----------
@@ -664,7 +702,7 @@ function passesScheme(x){
 
 function composite(s){
   const w = state.w, parts = [[s.safe,w.safe],[s.cheap,w.cheap],[s.conv,w.conv]];
-  if (state.phase === 'let') parts.push([s.supS, w.sup]);
+  if (state.phase === 'let') parts.push([s.supS, w.sup], [s.demS, w.dem]);
   let n = 0, d = 0;
   for (const [v,k] of parts) if (v != null && k > 0){ n += v*k; d += k; }
   return d ? Math.max(0, n/d - nuPen(s)) : null;
@@ -875,6 +913,7 @@ function selectDev(d){
         <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:40 前到达</div></dd>` : ''}
       ${d.cw != null || d.ls != null ? `<dt>到 Canary Wharf / Liverpool St</dt><dd>${d.cw ?? '—'} / ${d.ls ?? '—'} 分钟</dd>` : ''}
       ${nuText(d).length ? `<dt>负面邻居</dt><dd>${nuPills(d)}</dd>` : ''}
+      ${d.dm ? `<dt>附近需求</dt><dd>2 公里内就业 ${d.dm.jb} 千${d.dm.fi != null ? ' · 居民金融业 ' + d.dm.fi + '%' : ''}${d.dm.pr != null ? ' · 管理/专业 ' + d.dm.pr + '%' : ''}${yieldOf(d, d.from) != null ? ' · 毛收益率约 ' + yieldOf(d, d.from).toFixed(1) + '%（按起价）' : ''}</dd>` : ''}
       ${d.sup ? `<dt>附近新房供给</dt><dd>近三年成交 ${d.sup.n3.toLocaleString()} 套${d.sup.r != null ? ' · 占住户 ' + d.sup.r + '%' : ''}${d.sup.pu != null ? ' · 在途 ' + d.sup.pu.toLocaleString() + ' 套已获批' : ''}${d.sup.dv > 1 ? ' · 另有 ' + (d.sup.dv - 1) + ' 个新盘在售' : ''}</dd>` : ''}
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
         .map(([b, v]) => BEDS(+b) + ' ' + kPrice(Math.min(...v))).join(' · ')}</dd>` : ''}
@@ -983,6 +1022,7 @@ function drawSchemes(keep){
         ${x.gp != null ? `<span>GP ${x.gp}′${x.cw != null ? ' · CW ' + x.cw + '′' : ''}${x.ls != null ? ' · LS ' + x.ls + '′' : ''}</span>` : ''}
         <span>${x.f.slice(0,4)} 交付</span>
         ${x.sup && x.sup.r != null ? `<span>新房 ${x.sup.r}%</span>` : ''}
+        ${x.dm && x.dm.jb != null ? `<span>就业 ${x.dm.jb}k</span>` : ''}
         <span>二手 ${x.nr} 笔${x.l ? ' · ' + x.l.slice(0,4) : ''}</span>
         ${x.has ? '<span class="pill w">有在售</span>' : ''}</span>
     </button>`;
@@ -1141,9 +1181,10 @@ function selectScheme(x){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${x.s}</h2>
     <div class="where">${x.st_name} · ${x.pc} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}${x.gp != null ? ` · 8:40 到 Green Park 约 ${x.gp} 分钟` : ''}</div>
-    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}${bar('供给', x.supS)}</div>
+    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}${bar('供给', x.supS)}${bar('需求', x.demS)}</div>
     ${nuText(x).length ? `<p class="caveat">${nuText(x).map(t => '⚠ 附近有 ' + t).join('；')}。每个扣综合分 10 分（上限 30）。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(x.gp, x.cw, x.ls)}
+    <div class="sect">附近需求 · 谁会租、谁会买</div>${demKv(x, x.price)}
     <div class="sect">附近供给 · 1 公里</div>${supKv(x)}
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
@@ -1196,9 +1237,10 @@ function select(s){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${s.n}</h2>
     <div class="where">Zone ${s.z} · ${s.pop.toLocaleString()} 人住在步行 800 米内</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}${bar('供给', s.supS)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}${bar('供给', s.supS)}${bar('需求', s.demS)}</div>
     ${nuText(s).length ? `<p class="caveat">${nuText(s).map(t => '⚠ 车站附近有 ' + t).join('；')}。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(s.gp ? s.gp.min : null, s.cw ?? null, s.ls ?? null)}
+    <div class="sect">附近需求 · 谁会租、谁会买</div>${demKv(s, s.price)}
     <div class="sect">附近供给 · 1 公里</div>${supKv(s)}
     ${s.gp ? `<div class="sect">通勤 · 8:40 到 Green Park</div>
     <dl class="kv"><dt>门到门</dt><dd><b>${s.gp.min} 分钟</b> · ${s.gp.changes ? s.gp.changes + ' 次换乘' : '直达'}</dd>
@@ -1289,7 +1331,7 @@ function wire(){
                     prem:$('#lyPrem').checked,
                     mkt:$('#lyMkt').checked, home:$('#lyHome').checked};
     state.soon = $('#homeSoon').checked;
-    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value, sup:+$('#wSup').value};
+    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value, sup:+$('#wSup').value, dem:+$('#wDem').value};
     $('#priceV').textContent = state.pmin <= 100 && state.pmax >= 1000 ? '不限'
       : state.pmin <= 100 ? '≤ £' + state.pmax + 'k' : state.pmax >= 1000 ? '≥ £' + state.pmin + 'k'
       : '£' + state.pmin + 'k – £' + state.pmax + 'k';
@@ -1314,7 +1356,7 @@ function wire(){
   };
   for (const id of ['tmax','crime','prem','multi','unk','noNu','op',
                     'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','homeSoon','railStn',
-                    'wSafe','wCheap','wConv','wSup'])
+                    'wSafe','wCheap','wConv','wSup','wDem'])
     $('#' + id).addEventListener('input', () => { sync(); saveFilter(); });
   // The two price handles cannot cross: dragging one past the other pushes it.
   $('#pmin').addEventListener('input', () => {
