@@ -356,6 +356,7 @@ label.chk input{accent-color:var(--signal)}
       <div class="row"><span class="w">安全</span><input type="range" id="wSafe" min="0" max="3" step="1" value="1" aria-label="安全权重"></div>
       <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
       <div class="row"><span class="w" title="8:40 到 Green Park 的通勤时间">通勤</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="通勤权重"></div>
+      <div class="row"><span class="w" title="附近新房供给少为好；只在「出租·转手」口径里计入">供给</span><input type="range" id="wSup" min="0" max="3" step="1" value="1" aria-label="供给权重"></div>
     </div>
 
     </div><!-- /#controls -->
@@ -520,7 +521,7 @@ const METRIC = {
 const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
                unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,
                layers:{line:true, stn:true, prem:true, mkt:false, home:true},
-               w:{safe:1, cheap:1, conv:1}, phase:'live', noNu:false};
+               w:{safe:1, cheap:1, conv:1, sup:1}, phase:'live', noNu:false};
 
 /* ---------- scoring ---------- */
 function percentiles(vals){
@@ -542,7 +543,19 @@ const NU_LABEL = {prison:'监狱', waste:'垃圾场/污水厂', power:'发电厂
 const nuPen = o => Math.min(.3, .1 * ((o && o.nu) || []).length);
 const nuText = o => ((o && o.nu) || []).map(([k, m]) => `${NU_LABEL[k]} ${m >= 1000 ? (m / 1000).toFixed(1) + ' 公里' : m + ' 米'}`);
 const nuPills = o => nuText(o).map(t => `<span class="pill bad">⚠ ${t}</span>`).join('');
-let EMP_RANK = () => null;
+let EMP_RANK = () => null, SUP_RANK = () => null;
+// Fewer new flats landing nearby is better for a flat that will be let or sold later.
+const supScore = o => (o.sup && o.sup.r != null) ? 1 - SUP_RANK(o.sup.r) : null;
+const supKv = (o, self) => { const u = o.sup; if (!u) return '';
+  const pipe = u.pu != null ? `${u.pu.toLocaleString()} 套已获批${u.pq ? ' · ' + u.pq.toLocaleString() + ' 套待批' : ''}`
+    : '<span class="na">该区登记册不完整，未统计</span>';
+  const dv = u.dv != null ? u.dv - (self ? 1 : 0) : null;
+  return `<dl class="kv">
+  <dt>新房公寓成交 2023–25</dt><dd>${u.n3.toLocaleString()} 套<span class="na"> · 前三年 ${u.n3p.toLocaleString()}</span></dd>
+  <dt>占现有住户</dt><dd>${u.r != null ? u.r + '%' : '—'}<span class="na"> · 1 公里内约 ${u.hh.toLocaleString()} 户 · 中位 1.2%</span></dd>
+  <dt>在途（登记册）</dt><dd>${pipe}</dd>
+  ${dv != null ? `<dt>正在发售的新盘</dt><dd>${dv} 个</dd>` : ''}</dl>
+  <p class="caveat" style="margin-top:2px">1 公里内。成交数来自 Price Paid（楼盘竣工登记后才计入），在途来自各区的 Brownfield Land Register，只有登记册较完整的区才列。</p>`; };
 const best3 = (gp, cw, ls) => { const v = [gp, cw, ls].filter(x => x != null); return v.length ? Math.min(...v) : null; };
 const convOf = (gp, cw, ls) => {
   if (state.phase === 'let'){ const b = best3(gp, cw, ls); return b == null ? null : 1 - EMP_RANK(b); }
@@ -561,6 +574,7 @@ function score(){
   const pPrice = percentiles(S.map(s => s.price));
   GP_RANK = percentiles(S.map(s => s.gp ? s.gp.min : null));
   EMP_RANK = percentiles(S.map(s => best3(s.gp ? s.gp.min : null, s.cw, s.ls)));
+  SUP_RANK = percentiles([...S.map(s => s.sup && s.sup.r), ...SC.map(x => x.sup && x.sup.r)]);
   for (const s of S){
     s.safe  = s.home  == null ? null : 1 - pHome(s.home);
     s.cheap = s.price == null ? null : 1 - pPrice(s.price);
@@ -569,6 +583,7 @@ function score(){
     // It replaced a mix of line count, zone, shops and parks, which measured how
     // central a station looks rather than how long the morning takes.
     s.conv = convOf(s.gp ? s.gp.min : null, s.cw, s.ls);
+    s.supS = supScore(s);
   }
 }
 function scoreSchemes(){
@@ -581,6 +596,7 @@ function scoreSchemes(){
     // Its station's commute plus the walk to the station, ranked on the stations'
     // scale so a scheme and a station with the same minutes score the same.
     x.conv = convOf(x.gp, x.cw, x.ls);
+    x.supS = supScore(x);
   }
 }
 /* ---------- the quick filter ----------
@@ -648,6 +664,7 @@ function passesScheme(x){
 
 function composite(s){
   const w = state.w, parts = [[s.safe,w.safe],[s.cheap,w.cheap],[s.conv,w.conv]];
+  if (state.phase === 'let') parts.push([s.supS, w.sup]);
   let n = 0, d = 0;
   for (const [v,k] of parts) if (v != null && k > 0){ n += v*k; d += k; }
   return d ? Math.max(0, n/d - nuPen(s)) : null;
@@ -858,6 +875,7 @@ function selectDev(d){
         <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:40 前到达</div></dd>` : ''}
       ${d.cw != null || d.ls != null ? `<dt>到 Canary Wharf / Liverpool St</dt><dd>${d.cw ?? '—'} / ${d.ls ?? '—'} 分钟</dd>` : ''}
       ${nuText(d).length ? `<dt>负面邻居</dt><dd>${nuPills(d)}</dd>` : ''}
+      ${d.sup ? `<dt>附近新房供给</dt><dd>近三年成交 ${d.sup.n3.toLocaleString()} 套${d.sup.r != null ? ' · 占住户 ' + d.sup.r + '%' : ''}${d.sup.pu != null ? ' · 在途 ' + d.sup.pu.toLocaleString() + ' 套已获批' : ''}${d.sup.dv > 1 ? ' · 另有 ' + (d.sup.dv - 1) + ' 个新盘在售' : ''}</dd>` : ''}
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
         .map(([b, v]) => BEDS(+b) + ' ' + kPrice(Math.min(...v))).join(' · ')}</dd>` : ''}
     </dl>
@@ -964,6 +982,7 @@ function drawSchemes(keep){
         <span>${x.st} ${x.d}m</span>
         ${x.gp != null ? `<span>GP ${x.gp}′${x.cw != null ? ' · CW ' + x.cw + '′' : ''}${x.ls != null ? ' · LS ' + x.ls + '′' : ''}</span>` : ''}
         <span>${x.f.slice(0,4)} 交付</span>
+        ${x.sup && x.sup.r != null ? `<span>新房 ${x.sup.r}%</span>` : ''}
         <span>二手 ${x.nr} 笔${x.l ? ' · ' + x.l.slice(0,4) : ''}</span>
         ${x.has ? '<span class="pill w">有在售</span>' : ''}</span>
     </button>`;
@@ -1122,9 +1141,10 @@ function selectScheme(x){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${x.s}</h2>
     <div class="where">${x.st_name} · ${x.pc} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}${x.gp != null ? ` · 8:40 到 Green Park 约 ${x.gp} 分钟` : ''}</div>
-    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}</div>
+    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}${bar('供给', x.supS)}</div>
     ${nuText(x).length ? `<p class="caveat">${nuText(x).map(t => '⚠ 附近有 ' + t).join('；')}。每个扣综合分 10 分（上限 30）。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(x.gp, x.cw, x.ls)}
+    <div class="sect">附近供给 · 1 公里</div>${supKv(x)}
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
       <dt>开发商</dt><dd>${x.dv ? devTag(x) + `<span class="na"> ${x.dq === 1 ? '附近有其 ' + x.dn + '，未确认是同一栋' : x.dq === 3 ? (x.src ? `<a href="${x.src}" target="_blank" rel="noopener">${x.dn} · 来源</a>` : '人工核实') : '官网上的 ' + x.dn}</span>` : '<span class="na">未查到（Price Paid 不记录开发商）</span>'}</dd>
@@ -1176,9 +1196,10 @@ function select(s){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${s.n}</h2>
     <div class="where">Zone ${s.z} · ${s.pop.toLocaleString()} 人住在步行 800 米内</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}${bar('供给', s.supS)}</div>
     ${nuText(s).length ? `<p class="caveat">${nuText(s).map(t => '⚠ 车站附近有 ' + t).join('；')}。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(s.gp ? s.gp.min : null, s.cw ?? null, s.ls ?? null)}
+    <div class="sect">附近供给 · 1 公里</div>${supKv(s)}
     ${s.gp ? `<div class="sect">通勤 · 8:40 到 Green Park</div>
     <dl class="kv"><dt>门到门</dt><dd><b>${s.gp.min} 分钟</b> · ${s.gp.changes ? s.gp.changes + ' 次换乘' : '直达'}</dd>
       <dt>路线</dt><dd>${s.gp.route || '步行'}</dd></dl>` : ''}
@@ -1268,7 +1289,7 @@ function wire(){
                     prem:$('#lyPrem').checked,
                     mkt:$('#lyMkt').checked, home:$('#lyHome').checked};
     state.soon = $('#homeSoon').checked;
-    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
+    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value, sup:+$('#wSup').value};
     $('#priceV').textContent = state.pmin <= 100 && state.pmax >= 1000 ? '不限'
       : state.pmin <= 100 ? '≤ £' + state.pmax + 'k' : state.pmax >= 1000 ? '≥ £' + state.pmin + 'k'
       : '£' + state.pmin + 'k – £' + state.pmax + 'k';
@@ -1293,7 +1314,7 @@ function wire(){
   };
   for (const id of ['tmax','crime','prem','multi','unk','noNu','op',
                     'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','homeSoon','railStn',
-                    'wSafe','wCheap','wConv'])
+                    'wSafe','wCheap','wConv','wSup'])
     $('#' + id).addEventListener('input', () => { sync(); saveFilter(); });
   // The two price handles cannot cross: dragging one past the other pushes it.
   $('#pmin').addEventListener('input', () => {
