@@ -564,7 +564,9 @@ const demScore = o => { if (!o.dm) return null;
   const v = Object.entries(DEM_PARTS).map(([k, f]) => { const x = f(o.dm); return x == null ? null : DEM_R[k](x); }).filter(x => x != null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 // Gross yield on an asking price: the borough's average flat rent, a year of it, over the price.
-const yieldOf = (o, price) => (o.dm && o.dm.rent && price) ? 12 * o.dm.rent / price * 100 : null;
+// Over 12% means the price is a part-share or a data slip, not a flat: left blank rather than shown.
+const yieldOf = (o, price) => { const y = (o.dm && o.dm.rent && price) ? 12 * o.dm.rent / price * 100 : null;
+  return y != null && y <= 12 ? y : null; };
 const demKv = (o, price) => { const d = o.dm; if (!d) return '';
   const m = k => DEM_MED[k] != null ? `<span class="na"> · 中位 ${DEM_MED[k] % 1 ? DEM_MED[k].toFixed(1) : DEM_MED[k]}</span>` : '';
   const y = yieldOf(o, price);
