@@ -98,6 +98,23 @@ label.chk input{accent-color:var(--signal)}
 #railOps input{accent-color:var(--signal);flex:0 0 auto;margin:0}
 #railOps s{flex:0 0 15px;height:0;border-top:3px dashed currentColor;text-decoration:none}
 #railOps span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+.lnk{border:0;background:none;color:var(--muted);font:600 11px Archivo,sans-serif;cursor:pointer;
+  text-decoration:underline;padding:0}
+.lnk:hover{color:var(--ink)}
+#presets button{background:var(--signal-soft);border-color:var(--signal);color:var(--ink)}
+#filterBlock .seg button{padding:5px 8px;font-size:11.5px}
+.dual{position:relative;height:20px;margin:2px 0 4px}
+.dual .rail{position:absolute;left:7px;right:7px;top:8px;height:4px;border-radius:2px;background:var(--rule)}
+.dual .rail i{position:absolute;top:0;bottom:0;background:var(--signal);border-radius:2px}
+.dual input{position:absolute;left:0;top:0;width:100%;height:20px;margin:0;background:none;
+  pointer-events:none;-webkit-appearance:none;appearance:none}
+.dual input::-webkit-slider-runnable-track{background:none;height:20px}
+.dual input::-moz-range-track{background:none}
+.dual input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:15px;height:15px;
+  border-radius:50%;background:var(--panel);border:2px solid var(--signal);margin-top:2px;cursor:pointer}
+.dual input::-moz-range-thumb{pointer-events:auto;width:11px;height:11px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--signal);cursor:pointer}
+.item .dv{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px}
 #railBlock.off,#homeBlock.off{opacity:.4;pointer-events:none}
 #homeSrc{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
 #homeSrc label{display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer;min-width:0}
@@ -281,8 +298,14 @@ label.chk input{accent-color:var(--signal)}
       <div class="seg"><button id="homeAll" type="button">全选</button><button id="homeNone" type="button">全不选</button></div>
     </div>
 
-    <div class="block">
-      <div class="lbl">筛选</div>
+    <div class="block" id="filterBlock">
+      <div class="lbl" style="display:flex;justify-content:space-between;align-items:center">快速筛选
+        <button id="fReset" class="lnk" type="button">重置</button></div>
+      <div class="seg" id="presets">
+        <button data-p="a" type="button" title="£450–550k · 一房 · 通勤 ≤ 40 分钟">预算内一房</button>
+        <button data-p="b" type="button" title="£500–700k · 两房 · 通勤 ≤ 45 分钟">两房</button>
+        <button data-p="c" type="button" title="£250–450k · studio 和一房 · 通勤 ≤ 50 分钟">便宜入门</button>
+      </div>
       <div class="seg" id="zones" role="group" aria-label="Zone">
         <button data-z="1" aria-pressed="true">Zone 1</button>
         <button data-z="2" aria-pressed="true">2</button>
@@ -291,13 +314,33 @@ label.chk input{accent-color:var(--signal)}
         <button data-z="5" aria-pressed="true">5</button>
         <button data-z="6" aria-pressed="true">6</button>
       </div>
-      <div class="row"><span class="lbl">价格上限</span><span class="v" id="priceV">—</span></div>
-      <input type="range" id="price" min="250" max="900" step="25" value="600" aria-label="价格上限">
+      <div class="row"><span class="lbl">价格</span><span class="v" id="priceV">—</span></div>
+      <div class="dual" id="priceDual">
+        <div class="rail"><i id="priceFill"></i></div>
+        <input type="range" id="pmin" min="100" max="1000" step="25" value="100" aria-label="最低价格">
+        <input type="range" id="pmax" min="100" max="1000" step="25" value="600" aria-label="最高价格">
+      </div>
+      <div class="row"><span class="lbl">通勤 · 8:40 到 Green Park</span><span class="v" id="timeV">—</span></div>
+      <input type="range" id="tmax" min="15" max="75" step="1" value="75" aria-label="通勤时间上限（分钟）">
+      <div class="row"><span class="lbl">户型</span><span class="v" style="font-size:10.5px">新盘与在售房源</span></div>
+      <div class="seg" id="beds" role="group" aria-label="卧室数">
+        <button data-b="0" type="button" aria-pressed="false">Studio</button>
+        <button data-b="1" type="button" aria-pressed="false">1 房</button>
+        <button data-b="2" type="button" aria-pressed="false">2 房</button>
+        <button data-b="3" type="button" aria-pressed="false">3 房+</button>
+      </div>
+      <div class="row"><span class="lbl">二手成交至少</span><span class="v" style="font-size:10.5px">楼盘</span></div>
+      <div class="seg" id="minNr" role="group" aria-label="二手成交笔数">
+        <button data-n="0" type="button" aria-pressed="false">不限</button>
+        <button data-n="3" type="button" aria-pressed="false">3 笔</button>
+        <button data-n="5" type="button" aria-pressed="true">5 笔</button>
+        <button data-n="10" type="button" aria-pressed="false">10 笔</button>
+      </div>
       <div class="row"><span class="lbl">居家类犯罪上限</span><span class="v" id="crimeV">—</span></div>
       <input type="range" id="crime" min="20" max="200" step="5" value="200" aria-label="居家类犯罪上限">
       <label class="chk"><input type="checkbox" id="prem"> 步行内有 Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="multi"> 两条线以上（车站）</label>
-      <label class="chk"><input type="checkbox" id="resale" checked> 已有二手回流（楼盘）</label>
+      <label class="chk"><input type="checkbox" id="unk" checked> 含价格未公布的新盘</label>
     </div>
 
     <div class="block">
@@ -313,10 +356,16 @@ label.chk input{accent-color:var(--signal)}
       <div class="seg" id="mode" role="group" aria-label="列表内容">
         <button data-k="station" aria-pressed="true">车站排名</button>
         <button data-k="scheme" aria-pressed="false">楼盘排名</button>
+        <button data-k="homes" aria-pressed="false">新盘与房源</button>
       </div>
     </div>
 
     <div id="count">—</div>
+    <div class="seg" id="homeSort" hidden style="padding:0 14px 6px">
+      <button data-s="price" type="button" aria-pressed="true">价格低</button>
+      <button data-s="time" type="button" aria-pressed="false">通勤短</button>
+      <button data-s="score" type="button" aria-pressed="false">综合</button>
+    </div>
     <div id="listwrap"><div id="list"></div></div>
   </div>
 
@@ -460,8 +509,8 @@ const METRIC = {
        n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。'},
 };
 
-const state = {zones:new Set([1,2,3,4,5,6]), price:600, crime:200, prem:false, multi:false,
-               resale:true, op:0.30, railStn:false,
+const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
+               unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,
                layers:{line:true, stn:true, prem:true, mkt:false, home:true},
                w:{safe:1, cheap:1, conv:1}};
 
@@ -501,12 +550,62 @@ function scoreSchemes(){
     x.conv = x.gp == null ? null : 1 - GP_RANK(x.gp);
   }
 }
+/* ---------- the quick filter ----------
+   One set of limits for everything on the map. Price and commute apply to every
+   kind of thing; bedrooms only to what is for sale (new builds and listings),
+   because Price Paid records no bedrooms for a resale. Missing data passes:
+   a filter should not hide what it knows nothing about, except where the user
+   has asked it to (the unpublished-price tick). */
+const priceOk = v => v >= state.pmin*1000 && (state.pmax >= 1000 || v <= state.pmax*1000);
+const timeOk = m => m == null || state.tmax >= 75 || m <= state.tmax;
+const bedKey = b => b >= 3 ? 3 : b;
+const bedsOk = b => state.beds.size === 0 || state.beds.has(bedKey(b));
+// "1, 2 and 3 bedroom", "1-3 bedroom", "studios, 1 and 2" -> {0,1,2,3}
+function bedsOf(t){
+  const out = new Set(), x = (t || '').toLowerCase();
+  if (/studio/.test(x)) out.add(0);
+  for (const m of x.matchAll(/(\d)\s*[-–]\s*(\d)/g))
+    for (let b = +m[1]; b <= +m[2]; b++) out.add(bedKey(b));
+  for (const m of x.matchAll(/\d/g)) out.add(bedKey(+m[0]));
+  return out;
+}
+const nsOf = o => o._ns || (o._ns = nearestStation(o.lon, o.lat));
+const gpOf = o => { const n = nsOf(o); return n && n.s.gp ? n.s.gp.min + Math.round(n.m / 80) : null; };
+// -> {n: homes matching, from: their cheapest price} or null
+function devMatch(d){
+  const ns = nsOf(d);
+  if (ns && !state.zones.has(ns.s.zm)) return null;
+  if (!timeOk(d.gp ? d.gp.min : null)) return null;
+  if (d.plots && d.plots.length){
+    const m = d.plots.filter(p => priceOk(p.price) && bedsOk(p.beds));
+    return m.length ? {n:m.length, from:Math.min(...m.map(p => p.price)),
+                       beds:new Set(m.map(p => bedKey(p.beds)))} : null;
+  }
+  if (d.from == null) return state.unk ? {n:null, from:null, beds:bedsOf(d.summary), loose:true} : null;
+  if (d.from > state.pmax*1000 && state.pmax < 1000) return null;
+  if (d.to != null && d.to < state.pmin*1000) return null;
+  const bs = bedsOf(d.summary);
+  if (state.beds.size && bs.size && ![...state.beds].some(b => bs.has(b))) return null;
+  // A development that publishes only "from £X" says its cheapest home costs X, not
+  // that it has one in the range: confirmed only when X itself is in the range and
+  // no bedroom type is asked for. Otherwise it is kept, and marked as unconfirmed.
+  return {n:null, from:d.from, beds:bs, loose:state.beds.size > 0 || d.from < state.pmin*1000};
+}
+const groupRows = g => g.rows.filter(r => priceOk(r.price) && bedsOk(r.beds));
+function groupMatch(g){
+  if (!state.zones.has((nsOf(g) || {s:{zm:1}}).s.zm)) return null;
+  if (!timeOk(gpOf(g))) return null;
+  const m = groupRows(g);
+  return m.length ? {n:m.length, from:Math.min(...m.map(r => r.price)), rows:m,
+                     beds:new Set(m.map(r => bedKey(r.beds)))} : null;
+}
 function passesScheme(x){
   if (!state.zones.has(x.zm)) return false;
-  if (x.price != null && x.price > state.price*1000) return false;
+  if (x.price != null && !priceOk(x.price)) return false;
+  if (!timeOk(x.gp)) return false;
   if (x.home != null && x.home > state.crime) return false;
   if (state.prem && !x.prem) return false;
-  if (state.resale && !(x.nr >= 5 && x.rm != null)) return false;
+  if (state.minNr > 0 && !(x.nr >= state.minNr && x.rm != null)) return false;
   return true;
 }
 
@@ -519,7 +618,8 @@ function composite(s){
 function passes(s){
   if (!passesRail(s)) return false;
   if (!state.zones.has(s.zm)) return false;
-  if (s.price != null && s.price > state.price*1000) return false;
+  if (s.price != null && !priceOk(s.price)) return false;
+  if (!timeOk(s.gp ? s.gp.min : null)) return false;
   if (s.home != null && s.home > state.crime) return false;
   if (state.prem && !s.prem) return false;
   if (state.multi && s.L.length < 2) return false;
@@ -581,9 +681,9 @@ function groupListings(rows){
   });
 }
 function listingFC(){
-  return {type:'FeatureCollection', features:(srcOn('lst') ? LGROUPS : []).map(g => ({
+  return {type:'FeatureCollection', features:(srcOn('lst') ? LGROUPS : []).map(g => [g, groupMatch(g)]).filter(([, m]) => m).map(([g, m]) => ({
     type:'Feature', geometry:{type:'Point', coordinates:[g.lon, g.lat]},
-    properties:{i:g.i, n:g.rows.length, label:String(g.rows.length)}}))};
+    properties:{i:g.i, n:m.n, label:String(m.n)}}))};
 }
 
 // Developers' own sites: asking prices of what they are selling or about to, read
@@ -632,9 +732,10 @@ function devFC(){
   return {type:'FeatureCollection', features:(DEV ? DEV.developments : [])
     .map((d, i) => [d, i])
     .filter(([d]) => srcOn(d.dev) && (state.soon || d.status !== 'coming'))
-    .map(([d, i]) => ({type:'Feature', geometry:{type:'Point', coordinates:[d.lon, d.lat]},
+    .map(([d, i]) => [d, i, devMatch(d)]).filter(([, , m]) => m)
+    .map(([d, i, m]) => ({type:'Feature', geometry:{type:'Point', coordinates:[d.lon, d.lat]},
       properties:{i, icon:'dev-' + d.dev + (d.status === 'coming' ? '-soon' : ''), color:devStyle(d.dev).c,
-        label:d.name + '\n' + [d.status === 'coming' ? '即将开售' : d.from ? kPrice(d.from) + ' 起' : '',
+        label:d.name + '\n' + [d.status === 'coming' ? '即将开售' : m.from ? kPrice(m.from) + ' 起' : '',
                                d.gp ? 'Green Park ' + d.gp.min + ' 分' : ''].filter(Boolean).join(' · ')}}))};
 }
 // The source list: the two hand-built layers first, then one row per developer.
@@ -775,7 +876,10 @@ function draw(){
     MAP.getSource('devs').setData(devFC());
     MAP.getSource('listings').setData(listingFC());
   }
-  if (mode === 'station') drawStations(keepS); else drawSchemes(keepC);
+  $('#homeSort').hidden = mode !== 'homes';
+  if (mode === 'station') drawStations(keepS);
+  else if (mode === 'homes') drawHomes();
+  else drawSchemes(keepC);
 }
 function drawStations(keep){
   const sorted = keep.slice().sort((a,b) => (composite(b) ?? -1) - (composite(a) ?? -1));
@@ -814,14 +918,68 @@ function drawSchemes(keep){
   }).join('') || empty();
   bindList();
 }
+// Everything for sale that passes the filter, new builds and hand-collected
+// listings together, in one list. The "综合" order averages how quick the commute
+// is, how safe the nearest station's walk is and how cheap this is among the
+// others on the list -- the same three things the station ranking uses.
+let HOME_ITEMS = [], homeSort = 'price';
+const BEDLAB = {0:'Studio', 1:'1 房', 2:'2 房', 3:'3 房+'};
+function homeItems(){
+  const out = [];
+  if (DEV) DEV.developments.forEach((d, i) => {
+    if (!srcOn(d.dev) || (!state.soon && d.status === 'coming')) return;
+    const m = devMatch(d); if (!m) return;
+    out.push({kind:'d', d, m, name:d.name, color:devStyle(d.dev).c, dev:DEV.developers[d.dev] || d.dev,
+              price:m.from, gp:d.gp ? d.gp.min : null, ns:nsOf(d), soon:d.status === 'coming'});
+  });
+  if (srcOn('lst')) for (const g of LGROUPS){
+    const m = groupMatch(g); if (!m) continue;
+    out.push({kind:'l', g, m, name:g.dev, color:'#c2402a', dev:'候选房源', price:m.from,
+              gp:gpOf(g), ns:nsOf(g), soon:false});
+  }
+  const prices = out.map(o => o.price).filter(v => v != null).sort((a, b) => a - b);
+  for (const o of out){
+    const cheap = o.price == null || prices.length < 2 ? null
+      : 1 - prices.findIndex(v => v >= o.price) / (prices.length - 1);
+    const conv = o.gp == null ? null : 1 - GP_RANK(o.gp);
+    const parts = [conv, o.ns && o.ns.s.safe, cheap].filter(v => v != null);
+    o.score = parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : null;
+  }
+  const key = {price:o => o.price ?? 9e9, time:o => o.gp ?? 999, score:o => -(o.score ?? -1)}[homeSort];
+  // Homes whose price and type are confirmed come before developments that are only possible.
+  return out.sort((a, b) => (!!a.m.loose - !!b.m.loose) || key(a) - key(b));
+}
+function drawHomes(){
+  HOME_ITEMS = homeItems();
+  const total = (DEV ? DEV.developments.length : 0) + LGROUPS.length;
+  $('#count').textContent = `${HOME_ITEMS.length} 个新盘 / 房源符合条件 · 共 ${total} 个`;
+  $('#list').innerHTML = HOME_ITEMS.slice(0, 200).map((o, i) => {
+    const bd = [...(o.m.beds || [])].sort().map(b => BEDLAB[b]).join(' · ');
+    const home = o.m.n ? `${o.m.n} 套符合` : o.soon ? '即将开售' : o.m.loose ? '起价 · 区间待确认' : '整盘起价';
+    return `<button class="item" data-k="h" data-n="${i}">
+      <span class="nm"><i class="dv" style="background:${o.color}"></i>${o.name}</span>
+      <span class="sc">${o.price ? kPrice(o.price) : '未公布'}</span>
+      <span class="meta"><span class="pill z">${o.dev}</span>
+        ${o.ns ? `<span class="pill z">Z${o.ns.s.z}</span>` : ''}
+        <span>${home}</span>${bd ? `<span>${bd}</span>` : ''}
+        <span>${o.gp != null ? 'GP ' + o.gp + '′' : 'GP —'}</span></span>
+    </button>`;
+  }).join('') || '<div style="padding:18px 14px;color:var(--muted)">没有符合当前条件的新盘或房源。放宽价格、通勤、户型，或在上面打开更多来源。</div>';
+  bindList();
+}
 function empty(){
   return '<div style="padding:18px 14px;color:var(--muted)">没有符合当前条件的结果。放宽价格或治安上限。</div>';
 }
 function bindList(){
   for (const el of $('#list').querySelectorAll('.item'))
-    el.onclick = () => el.dataset.k === 's'
-      ? select(S.find(x => x.n === el.dataset.n))
-      : selectScheme(SC[+el.dataset.n]);
+    el.onclick = () => {
+      if (el.dataset.k === 's') return select(S.find(x => x.n === el.dataset.n));
+      if (el.dataset.k === 'h'){
+        const o = HOME_ITEMS[+el.dataset.n];
+        return o.kind === 'd' ? selectDev(o.d) : selectGroup(o.g);
+      }
+      selectScheme(SC[+el.dataset.n]);
+    };
 }
 
 function bar(label, v){
@@ -1039,12 +1197,14 @@ function wire(){
     const z = +b.dataset.z, on = b.getAttribute('aria-pressed') === 'true';
     on ? state.zones.delete(z) : state.zones.add(z);
     b.setAttribute('aria-pressed', !on);
-    draw();
+    draw(); saveFilter();
   };
   const sync = () => {
-    state.price = +$('#price').value; state.crime = +$('#crime').value;
+    state.pmin = +$('#pmin').value; state.pmax = +$('#pmax').value;
+    state.tmax = +$('#tmax').value; state.unk = $('#unk').checked;
+    state.crime = +$('#crime').value;
     state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
-    state.resale = $('#resale').checked; state.railStn = $('#railStn').checked;
+    state.railStn = $('#railStn').checked;
     state.op = +$('#op').value / 100;
     state.layers = {line:$('#lyLine').checked, rail:$('#lyRail').checked,
                     stn:$('#lyStn').checked,
@@ -1052,7 +1212,12 @@ function wire(){
                     mkt:$('#lyMkt').checked, home:$('#lyHome').checked};
     state.soon = $('#homeSoon').checked;
     state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value};
-    $('#priceV').textContent = '≤ £' + state.price + 'k';
+    $('#priceV').textContent = state.pmin <= 100 && state.pmax >= 1000 ? '不限'
+      : state.pmin <= 100 ? '≤ £' + state.pmax + 'k' : state.pmax >= 1000 ? '≥ £' + state.pmin + 'k'
+      : '£' + state.pmin + 'k – £' + state.pmax + 'k';
+    $('#priceFill').style.left = (state.pmin - 100) / 9 + '%';
+    $('#priceFill').style.right = (1000 - state.pmax) / 9 + '%';
+    $('#timeV').textContent = state.tmax >= 75 ? '不限' : '≤ ' + state.tmax + ' 分钟';
     $('#crimeV').textContent = state.crime >= 200 ? '不限' : '≤ ' + state.crime;
     $('#opV').textContent = Math.round(state.op * 100) + '%';
     if (ready){
@@ -1069,10 +1234,72 @@ function wire(){
     }
     draw();
   };
-  for (const id of ['price','crime','prem','multi','resale','op',
+  for (const id of ['tmax','crime','prem','multi','unk','op',
                     'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','homeSoon','railStn',
                     'wSafe','wCheap','wConv'])
-    $('#' + id).addEventListener('input', sync);
+    $('#' + id).addEventListener('input', () => { sync(); saveFilter(); });
+  // The two price handles cannot cross: dragging one past the other pushes it.
+  $('#pmin').addEventListener('input', () => {
+    if (+$('#pmin').value > +$('#pmax').value) $('#pmax').value = $('#pmin').value;
+    sync(); saveFilter(); });
+  $('#pmax').addEventListener('input', () => {
+    if (+$('#pmax').value < +$('#pmin').value) $('#pmin').value = $('#pmax').value;
+    sync(); saveFilter(); });
+  const pressed = (box, on) => { for (const b of box.children) b.setAttribute('aria-pressed', on(b)); };
+  $('#beds').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = +b.dataset.b;
+    state.beds.has(k) ? state.beds.delete(k) : state.beds.add(k);
+    pressed($('#beds'), x => state.beds.has(+x.dataset.b));
+    draw(); saveFilter();
+  };
+  $('#minNr').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.minNr = +b.dataset.n;
+    pressed($('#minNr'), x => +x.dataset.n === state.minNr);
+    draw(); saveFilter();
+  };
+  $('#homeSort').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    homeSort = b.dataset.s;
+    pressed($('#homeSort'), x => x.dataset.s === homeSort);
+    draw();
+  };
+  // Writes every control from `state` (presets, reset and a remembered filter all end here).
+  const apply = (f, view) => {
+    Object.assign(state, f);
+    $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; $('#tmax').value = state.tmax;
+    $('#crime').value = state.crime; $('#unk').checked = state.unk;
+    pressed($('#beds'), x => state.beds.has(+x.dataset.b));
+    pressed($('#minNr'), x => +x.dataset.n === state.minNr);
+    pressed($('#zones'), x => state.zones.has(+x.dataset.z));
+    sync(); saveFilter();
+    if (view){
+      mode = 'homes';
+      pressed($('#mode'), x => x.dataset.k === 'homes');
+      draw();
+    }
+  };
+  const PRESETS = {
+    a:{pmin:450, pmax:550, tmax:40, beds:new Set([1])},
+    b:{pmin:500, pmax:700, tmax:45, beds:new Set([2])},
+    c:{pmin:250, pmax:450, tmax:50, beds:new Set([0, 1])}};
+  $('#presets').onclick = e => {
+    const b = e.target.closest('button'); if (b) apply({...PRESETS[b.dataset.p], beds:new Set(PRESETS[b.dataset.p].beds)}, true);
+  };
+  $('#fReset').onclick = () => apply({pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5, unk:true,
+                                       crime:200, zones:new Set([1,2,3,4,5,6])});
+  // Remember the filter across visits: it is what a buyer sets once and comes back to.
+  function saveFilter(){
+    try { localStorage.setItem('zone14.filter', JSON.stringify({
+      pmin:state.pmin, pmax:state.pmax, tmax:state.tmax, beds:[...state.beds], minNr:state.minNr,
+      unk:state.unk, crime:state.crime, zones:[...state.zones]})); } catch (e) {}
+  }
+  try {
+    const f = JSON.parse(localStorage.getItem('zone14.filter') || 'null');
+    if (f) apply({pmin:f.pmin, pmax:f.pmax, tmax:f.tmax, beds:new Set(f.beds), minNr:f.minNr,
+                  unk:f.unk, crime:f.crime, zones:new Set(f.zones)});
+  } catch (e) {}
   sync();
 }
 
