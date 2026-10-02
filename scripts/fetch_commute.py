@@ -23,13 +23,17 @@ import json, pathlib, time, urllib.error, urllib.parse, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WEB = ROOT / "web" / "data"
-CACHE = ROOT / "data" / "raw" / "commute_gp_0840.json"
-TO = "940GZZLUGPK"                        # Green Park Underground Station
+# Where the 08:40 arrival is wanted. Green Park is the workplace in 2027-32; Canary
+# Wharf and Liverpool Street are the two big employment centres a tenant would be
+# commuting to afterwards, so they say how wide the tenant pool is.
+TARGETS = {"gp": "940GZZLUGPK",          # Green Park Underground Station
+           "cw": "940GZZLUCYF",          # Canary Wharf Underground Station
+           "ls": "940GZZLULVT"}          # Liverpool Street Underground Station
 DATE, TIME = "20261008", "0840"           # a Thursday; be at Green Park by 08:40
 MODES = "tube,dlr,overground,elizabeth-line,national-rail,bus,walking"
 
 
-def plan(lat, lon):
+def plan(lat, lon, TO):
     q = urllib.parse.urlencode({"date": DATE, "time": TIME, "timeIs": "Arriving",
                                 "journeyPreference": "LeastTime", "mode": MODES})
     url = f"https://api.tfl.gov.uk/Journey/JourneyResults/{lat},{lon}/to/{TO}?{q}"
@@ -58,6 +62,10 @@ def plan(lat, lon):
 
 
 def main():
+    import sys
+    key = sys.argv[1] if len(sys.argv) > 1 else "gp"
+    TO = TARGETS[key]
+    CACHE = ROOT / "data" / "raw" / f"commute_{key}_0840.json"
     devs = json.loads((WEB / "devs.json").read_text())["developments"]
     stations = [{"name": s["n"], "lat": s["y"], "lon": s["x"], "dev": "station"}
                 for s in json.loads((WEB / "stations.json").read_text())]
@@ -67,7 +75,7 @@ def main():
     # an anonymous caller that asks faster gets 429s, which are waited out.
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(2) as ex:
-        futs = {ex.submit(plan, d["lat"], d["lon"]): d for d in todo}
+        futs = {ex.submit(plan, d["lat"], d["lon"], TO): d for d in todo}
         for n, f in enumerate(as_completed(futs), 1):
             d = futs[f]
             try:

@@ -142,6 +142,8 @@ label.chk input{accent-color:var(--signal)}
   font-family:Archivo,sans-serif;font-weight:600;letter-spacing:.03em}
 .pill.z{background:var(--panel-2);color:var(--muted);border:1px solid var(--rule)}
 .pill.w{background:var(--good);color:#fff}
+.pill.bad{background:#fbe9e5;color:#a1321f;border:1px solid #e8b5aa}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill.bad{background:#3a1f1a;color:#f2a99a;border-color:#6b3329}}
 
 #legend{position:absolute;left:12px;bottom:12px;z-index:5;background:var(--panel);
   border:1px solid var(--rule);border-radius:7px;padding:9px 11px;box-shadow:var(--shadow);
@@ -341,10 +343,16 @@ label.chk input{accent-color:var(--signal)}
       <label class="chk"><input type="checkbox" id="prem"> 步行内有 Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="multi"> 两条线以上（车站）</label>
       <label class="chk"><input type="checkbox" id="unk" checked> 含价格未公布的新盘</label>
+      <label class="chk" title="监狱 500 米、垃圾场/污水厂 400 米、发电厂 500 米、高速 120 米、高架铁路 60 米、跑道 1.8 公里内"><input type="checkbox" id="noNu"> 排除有负面邻居的（监狱、垃圾场、高速…）</label>
     </div>
 
     <div class="block">
-      <div class="lbl">排序权重</div>
+      <div class="lbl">评分口径</div>
+      <div class="seg" id="phase" role="group" aria-label="评分口径">
+        <button data-ph="live" type="button" aria-pressed="true" title="通勤只看到 Green Park（上班地点）">自住期 2027–32</button>
+        <button data-ph="let" type="button" aria-pressed="false" title="通勤取到 Green Park / Canary Wharf / Liverpool Street 中最近的一个：租客和买家的辐射面">出租·转手 2032 后</button>
+      </div>
+      <div class="lbl" style="margin-top:10px">排序权重</div>
       <div class="row"><span class="w">安全</span><input type="range" id="wSafe" min="0" max="3" step="1" value="1" aria-label="安全权重"></div>
       <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
       <div class="row"><span class="w" title="8:40 到 Green Park 的通勤时间">通勤</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="通勤权重"></div>
@@ -512,7 +520,7 @@ const METRIC = {
 const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
                unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,
                layers:{line:true, stn:true, prem:true, mkt:false, home:true},
-               w:{safe:1, cheap:1, conv:1}};
+               w:{safe:1, cheap:1, conv:1}, phase:'live', noNu:false};
 
 /* ---------- scoring ---------- */
 function percentiles(vals){
@@ -524,10 +532,35 @@ function percentiles(vals){
     return ok.length < 2 ? .5 : lo/(ok.length-1);
   };
 }
+/* ---------- two phases ----------
+   2027-32 the flat is lived in and the commute that matters is the one to work
+   (Green Park). After that it is let or sold, and what a tenant or buyer weighs is
+   how many employment centres are close: the best of Green Park, Canary Wharf and
+   Liverpool Street. Anything unwelcome next door costs points in both. */
+const NU_LABEL = {prison:'监狱', waste:'垃圾场/污水厂', power:'发电厂',
+                  motorway:'高速公路', viaduct:'高架铁路', runway:'机场跑道/航线'};
+const nuPen = o => Math.min(.3, .1 * ((o && o.nu) || []).length);
+const nuText = o => ((o && o.nu) || []).map(([k, m]) => `${NU_LABEL[k]} ${m >= 1000 ? (m / 1000).toFixed(1) + ' 公里' : m + ' 米'}`);
+const nuPills = o => nuText(o).map(t => `<span class="pill bad">⚠ ${t}</span>`).join('');
+let EMP_RANK = () => null;
+const best3 = (gp, cw, ls) => { const v = [gp, cw, ls].filter(x => x != null); return v.length ? Math.min(...v) : null; };
+const convOf = (gp, cw, ls) => {
+  if (state.phase === 'let'){ const b = best3(gp, cw, ls); return b == null ? null : 1 - EMP_RANK(b); }
+  return gp == null ? null : 1 - GP_RANK(gp);
+};
+// the commute section every panel shows
+const commuteKv = (gp, cw, ls) => `<dl class="kv">
+  <dt>Green Park</dt><dd>${gp != null ? gp + ' 分钟' : '<span class="na">—</span>'}${state.phase === 'live' ? '<span class="na"> · 上班</span>' : ''}</dd>
+  <dt>Canary Wharf</dt><dd>${cw != null ? cw + ' 分钟' : '<span class="na">—</span>'}</dd>
+  <dt>Liverpool Street</dt><dd>${ls != null ? ls + ' 分钟' : '<span class="na">—</span>'}</dd></dl>
+  <p class="caveat" style="margin-top:2px">工作日 8:40 前到达，门到门，TfL 规划器。</p>`;
+const BARLAB = () => state.phase === 'let' ? '就业' : '通勤';
+function rescore(){ score(); scoreSchemes(); }
 function score(){
   const pHome  = percentiles(S.map(s => s.home));
   const pPrice = percentiles(S.map(s => s.price));
   GP_RANK = percentiles(S.map(s => s.gp ? s.gp.min : null));
+  EMP_RANK = percentiles(S.map(s => best3(s.gp ? s.gp.min : null, s.cw, s.ls)));
   for (const s of S){
     s.safe  = s.home  == null ? null : 1 - pHome(s.home);
     s.cheap = s.price == null ? null : 1 - pPrice(s.price);
@@ -535,7 +568,7 @@ function score(){
     // door, by TfL's planner -- ranked among Zone 1-6 stations, shorter higher.
     // It replaced a mix of line count, zone, shops and parks, which measured how
     // central a station looks rather than how long the morning takes.
-    s.conv = s.gp ? 1 - GP_RANK(s.gp.min) : null;
+    s.conv = convOf(s.gp ? s.gp.min : null, s.cw, s.ls);
   }
 }
 function scoreSchemes(){
@@ -547,7 +580,7 @@ function scoreSchemes(){
     x.cheap = x.price == null ? null : 1 - pPrice(x.price);
     // Its station's commute plus the walk to the station, ranked on the stations'
     // scale so a scheme and a station with the same minutes score the same.
-    x.conv = x.gp == null ? null : 1 - GP_RANK(x.gp);
+    x.conv = convOf(x.gp, x.cw, x.ls);
   }
 }
 /* ---------- the quick filter ----------
@@ -570,12 +603,15 @@ function bedsOf(t){
   return out;
 }
 const nsOf = o => o._ns || (o._ns = nearestStation(o.lon, o.lat));
+const cwOf = o => { const n = nsOf(o); return n && n.s.cw != null ? n.s.cw + Math.round(n.m / 80) : null; };
+const lsOf = o => { const n = nsOf(o); return n && n.s.ls != null ? n.s.ls + Math.round(n.m / 80) : null; };
 const gpOf = o => { const n = nsOf(o); return n && n.s.gp ? n.s.gp.min + Math.round(n.m / 80) : null; };
 // -> {n: homes matching, from: their cheapest price} or null
 function devMatch(d){
   const ns = nsOf(d);
   if (ns && !state.zones.has(ns.s.zm)) return null;
   if (!timeOk(d.gp ? d.gp.min : null)) return null;
+  if (state.noNu && d.nu && d.nu.length) return null;
   if (d.plots && d.plots.length){
     const m = d.plots.filter(p => priceOk(p.price) && bedsOk(p.beds));
     return m.length ? {n:m.length, from:Math.min(...m.map(p => p.price)),
@@ -605,6 +641,7 @@ function passesScheme(x){
   if (!timeOk(x.gp)) return false;
   if (x.home != null && x.home > state.crime) return false;
   if (state.prem && !x.prem) return false;
+  if (state.noNu && x.nu && x.nu.length) return false;
   if (state.minNr > 0 && !(x.nr >= state.minNr && x.rm != null)) return false;
   return true;
 }
@@ -613,7 +650,7 @@ function composite(s){
   const w = state.w, parts = [[s.safe,w.safe],[s.cheap,w.cheap],[s.conv,w.conv]];
   let n = 0, d = 0;
   for (const [v,k] of parts) if (v != null && k > 0){ n += v*k; d += k; }
-  return d ? n/d : null;
+  return d ? Math.max(0, n/d - nuPen(s)) : null;
 }
 function passes(s){
   if (!passesRail(s)) return false;
@@ -622,6 +659,7 @@ function passes(s){
   if (!timeOk(s.gp ? s.gp.min : null)) return false;
   if (s.home != null && s.home > state.crime) return false;
   if (state.prem && !s.prem) return false;
+  if (state.noNu && s.nu && s.nu.length) return false;
   if (state.multi && s.L.length < 2) return false;
   return true;
 }
@@ -818,6 +856,8 @@ function selectDev(d){
       ${d.ready ? `<dt>交房</dt><dd>${d.ready}</dd>` : ''}
       ${d.gp ? `<dt>到 Green Park</dt><dd><b>${d.gp.min} 分钟</b> · ${d.gp.changes ? d.gp.changes + ' 次换乘' : '直达'}
         <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:40 前到达</div></dd>` : ''}
+      ${d.cw != null || d.ls != null ? `<dt>到 Canary Wharf / Liverpool St</dt><dd>${d.cw ?? '—'} / ${d.ls ?? '—'} 分钟</dd>` : ''}
+      ${nuText(d).length ? `<dt>负面邻居</dt><dd>${nuPills(d)}</dd>` : ''}
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
         .map(([b, v]) => BEDS(+b) + ' ' + kPrice(Math.min(...v))).join(' · ')}</dd>` : ''}
     </dl>
@@ -828,7 +868,7 @@ function selectDev(d){
       : d.status === 'coming' ? `<p class="caveat">还没有放出具体房源，只能登记意向。</p>`
       : `<p class="caveat">这家官网不逐套列房源，具体单位和价格要问售楼处。</p>`}
     ${s ? `<div class="sect">最近车站 · ${s.n} · 步行约 ${ns.m} 米 · Zone ${s.z}</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('通勤', d.gp ? 1 - GP_RANK(d.gp.min) : s.conv)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), d.gp || d.cw || d.ls ? convOf(d.gp ? d.gp.min : null, d.cw ?? null, d.ls ?? null) : s.conv)}</div>
     <dl class="kv">
       <dt>车站 800 米内公寓中位成交</dt><dd>${ref ? money(ref) : '<span class="na">样本不足</span>'}</dd>
       ${ref && d.from ? `<dt>起价比中位成交</dt><dd>${((d.from / ref - 1) * 100).toFixed(0)}%</dd>` : ''}
@@ -900,10 +940,10 @@ function drawStations(keep){
     return `<button class="item" data-k="s" data-n="${s.n}" aria-current="${s === SEL}">
       <span class="nm">${s.n}</span>
       <span class="sc">${c == null ? '—' : pct(c)}</span>
-      <span class="meta"><span class="pill z">Z${s.z}</span>
+      <span class="meta"><span class="pill z">Z${s.z}</span>${nuPills(s)}
         <span>${fmtK(s.price)}</span>
         <span>犯罪 ${s.home == null ? '—' : s.home.toFixed(0)}</span>
-        <span>${s.gp ? 'GP ' + s.gp.min + '′' : s.L.length + ' 线'}</span>
+        <span>${s.gp ? 'GP ' + s.gp.min + '′' : s.L.length + ' 线'}${s.cw != null ? ' · CW ' + s.cw + '′' : ''}${s.ls != null ? ' · LS ' + s.ls + '′' : ''}</span>
         ${s.prem ? '<span class="pill w">Waitrose/M&amp;S</span>' : ''}</span>
     </button>`;
   }).join('') || empty();
@@ -918,11 +958,11 @@ function drawSchemes(keep){
       <span class="nm">${x.s}</span>
       <span class="sc">${c == null ? '—' : pct(c)}</span>
       <span class="meta"><span class="pill z">Z${x.z}</span>
-        ${devTag(x)}
+        ${devTag(x)}${nuPills(x)}
         <span>${fmtK(x.price)}</span>
         <span>犯罪 ${x.home == null ? '—' : x.home.toFixed(0)}</span>
         <span>${x.st} ${x.d}m</span>
-        ${x.gp != null ? `<span>GP ${x.gp}′</span>` : ''}
+        ${x.gp != null ? `<span>GP ${x.gp}′${x.cw != null ? ' · CW ' + x.cw + '′' : ''}${x.ls != null ? ' · LS ' + x.ls + '′' : ''}</span>` : ''}
         <span>${x.f.slice(0,4)} 交付</span>
         <span>二手 ${x.nr} 笔${x.l ? ' · ' + x.l.slice(0,4) : ''}</span>
         ${x.has ? '<span class="pill w">有在售</span>' : ''}</span>
@@ -942,20 +982,20 @@ function homeItems(){
     if (!srcOn(d.dev) || (!state.soon && d.status === 'coming')) return;
     const m = devMatch(d); if (!m) return;
     out.push({kind:'d', d, m, name:d.name, color:devStyle(d.dev).c, dev:DEV.developers[d.dev] || d.dev,
-              price:m.from, gp:d.gp ? d.gp.min : null, ns:nsOf(d), soon:d.status === 'coming'});
+              price:m.from, gp:d.gp ? d.gp.min : null, cw:d.cw ?? null, ls:d.ls ?? null, nu:d.nu, ns:nsOf(d), soon:d.status === 'coming'});
   });
   if (srcOn('lst')) for (const g of LGROUPS){
     const m = groupMatch(g); if (!m) continue;
     out.push({kind:'l', g, m, name:g.dev, color:'#c2402a', dev:'候选房源', price:m.from,
-              gp:gpOf(g), ns:nsOf(g), soon:false});
+              gp:gpOf(g), cw:cwOf(g), ls:lsOf(g), nu:[], ns:nsOf(g), soon:false});
   }
   const prices = out.map(o => o.price).filter(v => v != null).sort((a, b) => a - b);
   for (const o of out){
     const cheap = o.price == null || prices.length < 2 ? null
       : 1 - prices.findIndex(v => v >= o.price) / (prices.length - 1);
-    const conv = o.gp == null ? null : 1 - GP_RANK(o.gp);
+    const conv = convOf(o.gp, o.cw, o.ls);
     const parts = [conv, o.ns && o.ns.s.safe, cheap].filter(v => v != null);
-    o.score = parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : null;
+    o.score = parts.length ? Math.max(0, parts.reduce((a, b) => a + b, 0) / parts.length - nuPen(o)) : null;
   }
   const key = {price:o => o.price ?? 9e9, time:o => o.gp ?? 999, score:o => -(o.score ?? -1)}[homeSort];
   // Homes whose price and type are confirmed come before developments that are only possible.
@@ -971,7 +1011,7 @@ function drawHomes(){
     return `<button class="item" data-k="h" data-n="${i}">
       <span class="nm"><i class="dv" style="background:${o.color}"></i>${o.name}</span>
       <span class="sc">${o.price ? kPrice(o.price) : '未公布'}</span>
-      <span class="meta"><span class="pill z">${o.dev}</span>
+      <span class="meta"><span class="pill z">${o.dev}</span>${nuPills(o)}
         ${o.ns ? `<span class="pill z">Z${o.ns.s.z}</span>` : ''}
         <span>${home}</span>${bd ? `<span>${bd}</span>` : ''}
         <span>${o.gp != null ? 'GP ' + o.gp + '′' : 'GP —'}</span></span>
@@ -1082,7 +1122,9 @@ function selectScheme(x){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${x.s}</h2>
     <div class="where">${x.st_name} · ${x.pc} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}${x.gp != null ? ` · 8:40 到 Green Park 约 ${x.gp} 分钟` : ''}</div>
-    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar('通勤', x.conv)}</div>
+    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}</div>
+    ${nuText(x).length ? `<p class="caveat">${nuText(x).map(t => '⚠ 附近有 ' + t).join('；')}。每个扣综合分 10 分（上限 30）。</p>` : ''}
+    <div class="sect">到达 · 工作日 8:40</div>${commuteKv(x.gp, x.cw, x.ls)}
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
       <dt>开发商</dt><dd>${x.dv ? devTag(x) + `<span class="na"> ${x.dq === 1 ? '附近有其 ' + x.dn + '，未确认是同一栋' : x.dq === 3 ? (x.src ? `<a href="${x.src}" target="_blank" rel="noopener">${x.dn} · 来源</a>` : '人工核实') : '官网上的 ' + x.dn}</span>` : '<span class="na">未查到（Price Paid 不记录开发商）</span>'}</dd>
@@ -1134,7 +1176,9 @@ function select(s){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${s.n}</h2>
     <div class="where">Zone ${s.z} · ${s.pop.toLocaleString()} 人住在步行 800 米内</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar('通勤', s.conv)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}</div>
+    ${nuText(s).length ? `<p class="caveat">${nuText(s).map(t => '⚠ 车站附近有 ' + t).join('；')}。</p>` : ''}
+    <div class="sect">到达 · 工作日 8:40</div>${commuteKv(s.gp ? s.gp.min : null, s.cw ?? null, s.ls ?? null)}
     ${s.gp ? `<div class="sect">通勤 · 8:40 到 Green Park</div>
     <dl class="kv"><dt>门到门</dt><dd><b>${s.gp.min} 分钟</b> · ${s.gp.changes ? s.gp.changes + ' 次换乘' : '直达'}</dd>
       <dt>路线</dt><dd>${s.gp.route || '步行'}</dd></dl>` : ''}
@@ -1216,7 +1260,7 @@ function wire(){
     state.pmin = +$('#pmin').value; state.pmax = +$('#pmax').value;
     state.tmax = +$('#tmax').value; state.unk = $('#unk').checked;
     state.crime = +$('#crime').value;
-    state.prem = $('#prem').checked;  state.multi = $('#multi').checked;
+    state.prem = $('#prem').checked;  state.multi = $('#multi').checked;  state.noNu = $('#noNu').checked;
     state.railStn = $('#railStn').checked;
     state.op = +$('#op').value / 100;
     state.layers = {line:$('#lyLine').checked, rail:$('#lyRail').checked,
@@ -1247,7 +1291,7 @@ function wire(){
     }
     draw();
   };
-  for (const id of ['tmax','crime','prem','multi','unk','op',
+  for (const id of ['tmax','crime','prem','multi','unk','noNu','op',
                     'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','homeSoon','railStn',
                     'wSafe','wCheap','wConv'])
     $('#' + id).addEventListener('input', () => { sync(); saveFilter(); });
@@ -1272,6 +1316,13 @@ function wire(){
     pressed($('#minNr'), x => +x.dataset.n === state.minNr);
     draw(); saveFilter();
   };
+  $('#phase').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.phase = b.dataset.ph;
+    pressed($('#phase'), x => x.dataset.ph === state.phase);
+    $('#wConv').closest('.row').querySelector('.w').textContent = state.phase === 'let' ? '就业' : '通勤';
+    rescore(); draw(); saveFilter();
+  };
   $('#homeSort').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     homeSort = b.dataset.s;
@@ -1282,7 +1333,7 @@ function wire(){
   const apply = (f, view) => {
     Object.assign(state, f);
     $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; $('#tmax').value = state.tmax;
-    $('#crime').value = state.crime; $('#unk').checked = state.unk;
+    $('#crime').value = state.crime; $('#unk').checked = state.unk; $('#noNu').checked = state.noNu;
     pressed($('#beds'), x => state.beds.has(+x.dataset.b));
     pressed($('#minNr'), x => +x.dataset.n === state.minNr);
     pressed($('#zones'), x => state.zones.has(+x.dataset.z));
@@ -1301,17 +1352,18 @@ function wire(){
     const b = e.target.closest('button'); if (b) apply({...PRESETS[b.dataset.p], beds:new Set(PRESETS[b.dataset.p].beds)}, true);
   };
   $('#fReset').onclick = () => apply({pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5, unk:true,
-                                       crime:200, zones:new Set([1,2,3,4,5,6])});
+                                       crime:200, zones:new Set([1,2,3,4,5,6]), noNu:false});
   // Remember the filter across visits: it is what a buyer sets once and comes back to.
   function saveFilter(){
     try { localStorage.setItem('zone14.filter', JSON.stringify({
       pmin:state.pmin, pmax:state.pmax, tmax:state.tmax, beds:[...state.beds], minNr:state.minNr,
-      unk:state.unk, crime:state.crime, zones:[...state.zones]})); } catch (e) {}
+      unk:state.unk, crime:state.crime, zones:[...state.zones], noNu:state.noNu, phase:state.phase})); } catch (e) {}
   }
   try {
     const f = JSON.parse(localStorage.getItem('zone14.filter') || 'null');
     if (f) apply({pmin:f.pmin, pmax:f.pmax, tmax:f.tmax, beds:new Set(f.beds), minNr:f.minNr,
-                  unk:f.unk, crime:f.crime, zones:new Set(f.zones)});
+                  unk:f.unk, crime:f.crime, zones:new Set(f.zones), noNu:!!f.noNu, phase:f.phase || 'live'});
+    if (f && f.phase) $('#phase').onclick({target:$('#phase').querySelector(`[data-ph="${f.phase}"]`)});
   } catch (e) {}
   sync();
 }

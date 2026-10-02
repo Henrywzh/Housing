@@ -14,6 +14,7 @@ import pandas as pd
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from osm_layers import load as load_osm, is_premium  # noqa: E402
+from nuisance import Nuisance  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, PROC = ROOT / "data" / "raw", ROOT / "data" / "processed"
@@ -55,10 +56,23 @@ def main():
     # Minutes to be at Green Park by 08:40 (fetch_commute.py), the 方便 score's input.
     cmp = RAW / "commute_gp_0840.json"
     gp = json.loads(cmp.read_text()) if cmp.exists() else {}
+    # The other two places a tenant might be heading at 08:40: Canary Wharf and
+    # Liverpool Street. Minutes only; the route is kept for Green Park alone.
+    def _mins(key):
+        f = RAW / f"commute_{key}_0840.json"
+        return json.loads(f.read_text()) if f.exists() else {}
+    cw, ls = _mins("cw"), _mins("ls")
+    nu = Nuisance()
     for o in out:
-        g = gp.get(f"{o['y']:.5f},{o['x']:.5f}")
+        k = f"{o['y']:.5f},{o['x']:.5f}"
+        g = gp.get(k)
         if g:
             o["gp"] = g
+        if cw.get(k):
+            o["cw"] = cw[k]["min"]
+        if ls.get(k):
+            o["ls"] = ls[k]["min"]
+        o["nu"] = nu.flags(o["y"], o["x"])
     (WEB / "stations.json").write_text(json.dumps(out, separators=(",", ":")))
     stn = out                   # `out` is reused below
     print(f"{len(out)} Zone 1-{MAX_ZONE} stations -> stations.json "
@@ -179,6 +193,8 @@ def main():
     # A resale scheme's commute is its nearest station's plus the walk to it, at
     # 80 m a minute -- not asked of TfL separately for 1,099 points.
     st_gp = {o["n"]: o["gp"]["min"] for o in stn if o.get("gp")}
+    st_cw = {o["n"]: o["cw"] for o in stn if o.get("cw")}
+    st_ls = {o["n"]: o["ls"] for o in stn if o.get("ls")}
     # Price Paid never says who built a block, so the developer is read off the
     # developers' own sites: a scheme sitting on (<=60 m) or beside (<=150 m) a
     # development of theirs, selling or sold out. Hand-checked ones in
@@ -234,7 +250,10 @@ def main():
             # many, and most of them are not where the listing is.
             "has": any(r.street == a and abs(r.lat - la) < .0036 and abs(r.lon - lo) < .0058
                        for a, la, lo in lst_pts),
-            "gp": (st_gp[r.station] + round(r.station_m / 80)) if r.station in st_gp else None})
+            "gp": (st_gp[r.station] + round(r.station_m / 80)) if r.station in st_gp else None,
+            "cw": (st_cw[r.station] + round(r.station_m / 80)) if r.station in st_cw else None,
+            "ls": (st_ls[r.station] + round(r.station_m / 80)) if r.station in st_ls else None,
+            "nu": nu.flags(r.lat, r.lon)})
     (WEB / "schemes.json").write_text(json.dumps(rows, separators=(",", ":")))
     print(f"{len(rows):,} Zone 1-4 schemes -> schemes.json "
           f"({(WEB / 'schemes.json').stat().st_size/1e3:.0f} KB)")
@@ -263,6 +282,12 @@ def main():
         g = gp.get(f"{d['lat']:.5f},{d['lon']:.5f}")
         if g:
             d["gp"] = g
+        k = f"{d['lat']:.5f},{d['lon']:.5f}"
+        if cw.get(k):
+            d["cw"] = cw[k]["min"]
+        if ls.get(k):
+            d["ls"] = ls[k]["min"]
+        d["nu"] = nu.flags(d["lat"], d["lon"])
     if devs:
         (WEB / "devs.json").write_text(json.dumps(
             {"fetched": min(fetched), "developers": {**dev_names, **names}, "developments": devs},
