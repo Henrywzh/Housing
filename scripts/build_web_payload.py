@@ -8,7 +8,7 @@ Everything here is rounded and renamed short. Five decimal places is about a
 metre, which is finer than the 15 m simplification the polygons already carry,
 and one-letter keys off a 20,000-row array are worth roughly a third of the file.
 """
-import json, pathlib, sys
+import json, math, pathlib, sys
 import numpy as np
 import pandas as pd
 
@@ -179,9 +179,44 @@ def main():
     # A resale scheme's commute is its nearest station's plus the walk to it, at
     # 80 m a minute -- not asked of TfL separately for 1,099 points.
     st_gp = {o["n"]: o["gp"]["min"] for o in stn if o.get("gp")}
+    # Price Paid never says who built a block, so the developer is read off the
+    # developers' own sites: a scheme sitting on (<=60 m) or beside (<=150 m) a
+    # development of theirs, selling or sold out. Hand-checked ones in
+    # data/raw/scheme_developers.json override that. "dq" says how sure: 3 checked
+    # by hand, 2 on the site, 1 nearby only.
+    dev_pts = []
+    bj = RAW / "barratt.json"
+    if bj.exists():
+        dev_pts += [("barratt", d["name"], d["lat"], d["lon"]) for d in json.loads(bj.read_text())["developments"]]
+    dj = RAW / "developers.json"
+    dev_names = {"barratt": "Barratt London"}
+    if dj.exists():
+        o = json.loads(dj.read_text())
+        dev_names.update(o["developers"])
+        dev_pts += [(d["dev"], d["name"], d["lat"], d["lon"]) for d in o["developments"] + o.get("past", [])
+                    if d["dev"] != "barratt" and d.get("lat") is not None and not d.get("approx")]
+    manual = {}
+    mj = RAW / "scheme_developers.json"
+    if mj.exists():
+        m = json.loads(mj.read_text())
+        dev_names.update(m.get("developers", {}))
+        manual = m["schemes"]
+
+    def developer_of(r):
+        if r.postcode in manual:
+            return manual[r.postcode]["dev"], manual[r.postcode].get("name"), 3
+        best = min(((math.hypot((r.lat - la) * 111_000, (r.lon - lo) * 69_000), k, n)
+                    for k, n, la, lo in dev_pts), default=None)
+        if best and best[0] <= 60:
+            return best[1], best[2], 2
+        if best and best[0] <= 150:
+            return best[1], best[2], 1
+        return None, None, 0
     rows = []
     for r in sc.itertuples():
+        dv, dn, dq = developer_of(r)
         rows.append({
+            "dv": dv, "dn": dn, "dq": dq,
             "s": r.label, "sec": r.sector, "pc": r.postcode, "st_name": r.street.title(), "y": round(r.lat, 5), "x": round(r.lon, 5),
             "st": r.station, "z": r.zone, "zm": int(r.zone_min), "d": int(r.station_m),
             "nn": int(r.n_new), "nr": int(r.n_resale),
@@ -230,7 +265,7 @@ def main():
             d["gp"] = g
     if devs:
         (WEB / "devs.json").write_text(json.dumps(
-            {"fetched": min(fetched), "developers": names, "developments": devs},
+            {"fetched": min(fetched), "developers": {**dev_names, **names}, "developments": devs},
             ensure_ascii=False, separators=(",", ":")))
         by = {}
         for d in devs:

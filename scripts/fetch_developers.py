@@ -241,6 +241,10 @@ def main():
     prev = json.loads(OUT.read_text())["developments"] if OUT.exists() else []
     keys = a.only or list(DEVS)
     rows = [r for r in prev if r["dev"] not in keys and r["dev"] in DEVS]
+    # Sold-out schemes are not for sale, but they say who built what stands there,
+    # which is what a resale scheme's "developer" is read from.
+    past = [r for r in (json.loads(OUT.read_text()).get("past", []) if OUT.exists() else [])
+            if r["dev"] not in keys and r["dev"] in DEVS]
     for key in keys:
         label = DEVS[key][0]
         urls = dev_urls(key)
@@ -275,10 +279,13 @@ def main():
             if r["lat"] is None:
                 far += 1
                 continue
+            r["dev"] = key
             if r["status"] == "sold":
                 sold += 1
+                if key in SLUG_NAMES:
+                    r["name"] = u.rstrip("/").rsplit("/", 1)[-1].replace("-", " ").title()
+                past.append(r)
                 continue
-            r["dev"] = key
             if key in SLUG_NAMES:
                 r["name"] = u.rstrip("/").rsplit("/", 1)[-1].replace("-", " ").title()
             rows.append(r)
@@ -288,7 +295,7 @@ def main():
     rows.sort(key=lambda r: (r["dev"], r["name"]))
     OUT.write_text(json.dumps({"fetched": time.strftime("%Y-%m-%d"),
                                "developers": {k: v[0] for k, v in DEVS.items()},
-                               "developments": rows}, ensure_ascii=False, indent=1))
+                               "developments": rows, "past": past}, ensure_ascii=False, indent=1))
     print(f"\n{len(rows)} developments -> {OUT.relative_to(ROOT)}")
 
 

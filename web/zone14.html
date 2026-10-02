@@ -702,6 +702,17 @@ const DEV_STYLE = {
   fairview:     {m:'Fv', c:'#2f64b0', sh:'hex'},
   redrow:       {m:'R',  c:'#b3122e', sh:'diamond'},
 };
+// A resale scheme's builder, when known. Price Paid never says; it is read off the
+// developers' own sites by location (dq 2 on the site, 1 only nearby) or checked
+// by hand (3). A nearby match is drawn hollow with a "≈".
+const devName = k => (DEV && DEV.developers[k]) || k;
+function devTag(x){
+  if (!x.dv) return '';
+  const c = devStyle(x.dv).c;
+  return x.dq === 1
+    ? `<span class="chip" style="margin:0;background:none;color:${c};border:1px solid ${c}" title="附近有${devName(x.dv)}的 ${x.dn}，未确认">≈${devName(x.dv)}</span>`
+    : `<span class="chip" style="margin:0;background:${c}">${devName(x.dv)}</span>`;
+}
 const devStyle = k => DEV_STYLE[k] || {m:k.slice(0, 2), c:'#555', sh:'circle'};
 // One badge, drawn on a canvas at twice the size it is shown. Filled for on
 // sale; white with a coloured rim for coming soon.
@@ -907,6 +918,7 @@ function drawSchemes(keep){
       <span class="nm">${x.s}</span>
       <span class="sc">${c == null ? '—' : pct(c)}</span>
       <span class="meta"><span class="pill z">Z${x.z}</span>
+        ${devTag(x)}
         <span>${fmtK(x.price)}</span>
         <span>犯罪 ${x.home == null ? '—' : x.home.toFixed(0)}</span>
         <span>${x.st} ${x.d}m</span>
@@ -1073,6 +1085,7 @@ function selectScheme(x){
     <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar('通勤', x.conv)}</div>
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
+      <dt>开发商</dt><dd>${x.dv ? devTag(x) + `<span class="na"> ${x.dq === 1 ? '附近有其 ' + x.dn + '，未确认是同一栋' : x.dq === 3 ? '人工核实' : '官网上的 ' + x.dn}</span>` : '<span class="na">未查到（Price Paid 不记录开发商）</span>'}</dd>
       <dt>首批新房</dt><dd>${x.f}</dd>
       <dt>新房成交</dt><dd>${x.nn} 笔${x.nm ? ' · 中位 £' + x.nm.toLocaleString() : ''}</dd>
       <dt>二手回流</dt><dd>${x.nr} 笔${x.l ? ' · 最近 ' + x.l : ''}</dd>
