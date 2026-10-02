@@ -1085,7 +1085,7 @@ function selectScheme(x){
     <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar('通勤', x.conv)}</div>
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
-      <dt>开发商</dt><dd>${x.dv ? devTag(x) + `<span class="na"> ${x.dq === 1 ? '附近有其 ' + x.dn + '，未确认是同一栋' : x.dq === 3 ? '人工核实' : '官网上的 ' + x.dn}</span>` : '<span class="na">未查到（Price Paid 不记录开发商）</span>'}</dd>
+      <dt>开发商</dt><dd>${x.dv ? devTag(x) + `<span class="na"> ${x.dq === 1 ? '附近有其 ' + x.dn + '，未确认是同一栋' : x.dq === 3 ? (x.src ? `<a href="${x.src}" target="_blank" rel="noopener">${x.dn} · 来源</a>` : '人工核实') : '官网上的 ' + x.dn}</span>` : '<span class="na">未查到（Price Paid 不记录开发商）</span>'}</dd>
       <dt>首批新房</dt><dd>${x.f}</dd>
       <dt>新房成交</dt><dd>${x.nn} 笔${x.nm ? ' · 中位 £' + x.nm.toLocaleString() : ''}</dd>
       <dt>二手回流</dt><dd>${x.nr} 笔${x.l ? ' · 最近 ' + x.l : ''}</dd>

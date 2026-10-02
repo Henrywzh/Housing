@@ -216,7 +216,7 @@ def main():
     for r in sc.itertuples():
         dv, dn, dq = developer_of(r)
         rows.append({
-            "dv": dv, "dn": dn, "dq": dq,
+            "dv": dv, "dn": dn, "dq": dq, "src": manual.get(r.postcode, {}).get("src"),
             "s": r.label, "sec": r.sector, "pc": r.postcode, "st_name": r.street.title(), "y": round(r.lat, 5), "x": round(r.lon, 5),
             "st": r.station, "z": r.zone, "zm": int(r.zone_min), "d": int(r.station_m),
             "nn": int(r.n_new), "nr": int(r.n_resale),
