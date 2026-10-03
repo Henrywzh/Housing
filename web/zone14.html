@@ -286,6 +286,28 @@ label.chk input{accent-color:var(--signal)}
           <option value="e_ar">阿拉伯裔 Arab</option>
           <option value="e_ot">其他族裔</option>
         </optgroup>
+        <optgroup label="人口构成 · 出生地与语言">
+          <option value="e_nb">海外出生 %</option>
+          <option value="e_nl">主要语言不是英语 %</option>
+          <option value="e_pe">英语说不好或不会说 %</option>
+        </optgroup>
+        <optgroup label="人口构成 · 宗教">
+          <option value="e_rn0">无宗教</option>
+          <option value="e_rch">基督教</option>
+          <option value="e_rmu">穆斯林</option>
+          <option value="e_rhi">印度教</option>
+          <option value="e_rje">犹太教</option>
+          <option value="e_rbu">佛教</option>
+          <option value="e_rsi">锡克教</option>
+        </optgroup>
+        <optgroup label="人口构成 · 家庭类型（占住户）">
+          <option value="e_h1o">66 岁以上独居</option>
+          <option value="e_h1">其他单人户</option>
+          <option value="e_hnc">夫妻/同居，无孩子</option>
+          <option value="e_hdc">有未成年孩子的家庭</option>
+          <option value="e_hlp">单亲，带未成年孩子</option>
+          <option value="e_hst">学生及其他户</option>
+        </optgroup>
         <optgroup label="市场">
           <option value="p">公寓中位价</option>
           <option value="nb">新房占比 %</option>
@@ -549,6 +571,17 @@ const ETH_NAME = {wh:'白人', wb:'英国白人（英格兰/威尔士/苏格兰/
 for (const [k, nm] of Object.entries(ETH_NAME))
   METRIC['e_' + k] = {t:nm + ' %', f:v => (v < 10 ? v.toFixed(1) : v.toFixed(0)) + '%',
     n:'Census 2021 自报族裔，占该 LSOA 常住人口的比例。这是人口构成，不是收入、犯罪或好坏的度量；配色按这一族裔在伦敦各 LSOA 中的分位数。'};
+// the rest of the Census make-up: birthplace and language, religion (all of residents), household types (of households)
+const MIX_NAME = {nb:['海外出生', '常住人口中出生在英国以外的比例。'], nl:['主要语言不是英语', '3 岁以上常住人口中，主要语言不是英语的比例。'],
+  pe:['英语说不好或不会说', '3 岁以上常住人口中，主要语言不是英语且英语说不好或完全不会的比例。'],
+  rn0:['无宗教', '自报无宗教的常住人口比例。'], rch:['基督教', '自报信基督教的常住人口比例。'], rmu:['穆斯林', '自报信伊斯兰教的常住人口比例。'],
+  rhi:['印度教', '自报信印度教的常住人口比例。'], rje:['犹太教', '自报信犹太教的常住人口比例。'], rbu:['佛教', '自报信佛教的常住人口比例。'], rsi:['锡克教', '自报信锡克教的常住人口比例。'],
+  h1o:['66 岁以上独居', '占该 LSOA 全部住户的比例。'], h1:['其他单人户', '66 岁以下独居，占全部住户的比例。'], hnc:['夫妻/同居，无孩子', '占全部住户的比例。'],
+  hdc:['有未成年孩子的家庭', '含夫妻、同居、单亲以及其他户型，只要家里有未成年孩子，占全部住户的比例。'], hlp:['单亲，带未成年孩子', '占全部住户的比例。'],
+  hst:['学生及其他户', '全部为全日制学生、或不属于上面几类的住户，占全部住户的比例。']};
+for (const [k, [nm, n]] of Object.entries(MIX_NAME))
+  METRIC['e_' + k] = {t:nm + ' %', f:v => (v < 10 ? v.toFixed(1) : v.toFixed(0)) + '%',
+    n:'Census 2021。' + n + '这是人口构成，不是好坏的度量；配色按伦敦各 LSOA 的分位数。'};
 
 const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
                unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,

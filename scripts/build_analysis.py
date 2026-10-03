@@ -15,18 +15,19 @@ import numpy as np
 import pandas as pd
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from analyze_ethnicity import load  # noqa: E402
+from demand import lsoa_extra  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, WEB = ROOT / "data" / "raw", ROOT / "web" / "data"
 
 COLS = ["pop", "wb", "ir", "wo", "wh", "ch", "ax", "in", "pk", "bd", "oa", "as", "af", "cb", "ob", "bk", "mx", "ar", "ot", "nb",
+        "rn0", "rch", "rmu", "rhi", "rje", "rbu", "rsi", "nl", "pe", "h1o", "h1", "hnc", "hdc", "hlp", "hst",
         "inc", "pro", "dg", "p", "br", "vi", "ld", "pr", "ow", "ag", "vs"]
 
 
 def main():
     d = load()
-    cob = pd.read_csv(RAW / "lsoa_cob.csv").pivot_table(index="GEOGRAPHY_CODE", columns="C2021_COB_12", values="OBS_VALUE")
-    d["nb"] = 100 * (1 - cob[1] / cob[0])
+    d = d.join(lsoa_extra())
     d = d.rename(columns={"net_income": "inc", "pro_pct": "pro", "degree_pct": "dg", "flat_price": "p",
                           "burglary_resid_per_1000_hh": "br", "violence_per_1000": "vi", "log_density": "ld",
                           "private_rent_pct": "pr", "owned_pct": "ow", "age_25_39_pct": "ag", "visitor_share": "vs"})
@@ -40,6 +41,10 @@ def main():
     b = pd.read_csv(RAW / "lad_cob.csv").pivot_table(index="GEOGRAPHY_NAME", columns="C2021_COB_58", values="OBS_VALUE")
     bor = [{"n": n, "t": int(r[0]), "hk": int(r[35]), "cn": int(r[34]), "in": int(r[38]), "pk": int(r[39]), "bd": int(r[40]),
             "sg": int(r[45]), "my": int(r[44])} for n, r in b.iterrows()]
+    lg = pd.read_csv(RAW / "lad_lang.csv").pivot_table(index="GEOGRAPHY_NAME", columns="C2021_MLANG_94", values="OBS_VALUE")
+    for b in bor:
+        r = lg.loc[b["n"]]
+        b["cant"], b["mand"], b["ochi"], b["l"] = int(r[63]), int(r[62]), int(r[64]), int(r[0])
     (WEB / "analysis.json").write_text(json.dumps({"n": len(d), "cols": cols, "bor": bor}, separators=(",", ":")))
     (WEB / "analysis.html").write_text(PAGE)
     print(f"analysis.json: {len(d):,} LSOAs, {(WEB / 'analysis.json').stat().st_size/1e3:.0f} KB")
@@ -81,7 +86,7 @@ td.sel{outline:2px solid var(--ink);outline-offset:-2px}
 
 <div class="card">
 <h2>一个地方的人口构成，和收入、职业、犯罪、房价有什么关联？</h2>
-<p class="sub">伦敦 <span id="n">—</span> 个小区（LSOA，约 1500 人一块），Census 2021。按人口加权。<b>关联不是原因</b>：族裔构成背后是移民时间、当年的住房、年龄和教育，下面的「控制其他因素」就是把这些先扣掉再看。</p>
+<p class="sub">伦敦 <span id="n">—</span> 个小区（LSOA，约 1500 人一块），Census 2021：族裔、出生地与语言、宗教、家庭类型。按人口加权。<b>关联不是原因</b>：族裔构成背后是移民时间、当年的住房、年龄和教育，下面的「控制其他因素」就是把这些先扣掉再看。</p>
 <div class="ctl">
  <label>人口构成 <select id="x"></select></label>
  <label>对照 <select id="y"></select></label>
@@ -109,8 +114,8 @@ td.sel{outline:2px solid var(--ink);outline-offset:-2px}
 </div>
 
 <div class="card">
-<h2>香港出生的居民 · 按区</h2>
-<p class="sub">Census 2021，出生地为香港（详细出生地只公布到区一级，所以这里不能细到小区）。同时列出中国大陆、新加坡、马来西亚出生，作对照。</p>
+<h2>香港出生、说广东话的居民 · 按区</h2>
+<p class="sub">Census 2021。出生地和具体语言（广东话、普通话）只公布到区一级，所以这里不能细到小区。说广东话 = 主要语言是粤语，不一定是香港人。同时列出大陆、新加坡、马来西亚出生，作对照。</p>
 <div class="scroll"><table id="bor"></table></div>
 </div>
 
@@ -123,7 +128,12 @@ td.sel{outline:2px solid var(--ink);outline-offset:-2px}
 </div>
 </div>
 <script>
-const NAMES = {wb:'英国白人', ir:'爱尔兰裔白人', wo:'其他白人', wh:'白人（合计）', ch:'华裔', ax:'亚裔（不含华裔）', in:'印度裔', pk:'巴基斯坦裔', bd:'孟加拉裔', oa:'其他亚裔', as:'亚裔（合计）', af:'非洲裔', cb:'加勒比裔', ob:'其他黑人', bk:'黑人（合计）', mx:'混血', ar:'阿拉伯裔', ot:'其他族裔', nb:'海外出生'};
+const SECT = [
+  ['族裔', {wh:'白人（合计）', wb:'英国白人', ir:'爱尔兰裔白人', wo:'其他白人', as:'亚裔（合计）', ch:'华裔', ax:'亚裔（不含华裔）', in:'印度裔', pk:'巴基斯坦裔', bd:'孟加拉裔', oa:'其他亚裔', bk:'黑人（合计）', af:'非洲裔', cb:'加勒比裔', ob:'其他黑人', mx:'混血', ar:'阿拉伯裔', ot:'其他族裔'}],
+  ['出生地与语言', {nb:'海外出生', nl:'主要语言不是英语', pe:'英语说不好或不会说'}],
+  ['宗教', {rn0:'无宗教', rch:'基督教', rmu:'穆斯林', rhi:'印度教', rje:'犹太教', rbu:'佛教', rsi:'锡克教'}],
+  ['家庭类型（占住户）', {h1o:'66 岁以上独居', h1:'其他单人户', hnc:'夫妻/同居，无孩子', hdc:'有未成年孩子的家庭', hlp:'单亲，带未成年孩子', hst:'学生及其他户'}]];
+const NAMES = Object.assign({}, ...SECT.map(s => s[1]));
 const GROUPS = Object.keys(NAMES);
 const OUT = {inc:['家庭净收入（£/年）', v => '£' + Math.round(v / 1000) + 'k'], pro:['管理/专业职业 %', v => v.toFixed(0) + '%'], dg:['本科及以上 %', v => v.toFixed(0) + '%'],
   p:['公寓中位价', v => '£' + Math.round(v / 1000) + 'k'], br:['住宅入室 / 千户', v => v.toFixed(0)], vi:['暴力 / 千人', v => v.toFixed(0)]};
@@ -173,13 +183,13 @@ function pair(xk, yk){
 function median(a){ const s = a.slice().sort((p, q) => p - q); return s[s.length >> 1]; }
 function color(r){ const a = Math.min(1, Math.abs(r) / .6); return r >= 0 ? `rgba(44,111,82,${.08 + .6*a})` : `rgba(168,56,42,${.08 + .6*a})`; }
 function build(){
-  $('x').innerHTML = GROUPS.map(g => `<option value="${g}">${NAMES[g]}</option>`).join('');
+  $('x').innerHTML = SECT.map(([t, m]) => `<optgroup label="${t}">${Object.entries(m).map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</optgroup>`).join('');
   $('y').innerHTML = Object.entries(OUT).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('');
   $('x').value = 'bk'; $('y').value = 'inc';
   $('n').textContent = D.n.toLocaleString();
   const bors = D.bor.slice().sort((a, b) => b.hk - a.hk);
-  $('bor').innerHTML = `<tr><th>区</th><th>香港出生</th><th>占居民</th><th>中国大陆出生</th><th>新加坡</th><th>马来西亚</th></tr>` +
-    bors.map(b => `<tr><td>${b.n}</td><td>${b.hk.toLocaleString()}</td><td>${(100*b.hk/b.t).toFixed(2)}%</td><td>${b.cn.toLocaleString()}</td><td>${b.sg.toLocaleString()}</td><td>${b.my.toLocaleString()}</td></tr>`).join('');
+  $('bor').innerHTML = `<tr><th>区</th><th>香港出生</th><th>占居民</th><th>说广东话</th><th>说普通话</th><th>中国大陆出生</th><th>新加坡出生</th><th>马来西亚出生</th></tr>` +
+    bors.map(b => `<tr><td>${b.n}</td><td>${b.hk.toLocaleString()}</td><td>${(100*b.hk/b.t).toFixed(2)}%</td><td>${b.cant.toLocaleString()}</td><td>${b.mand.toLocaleString()}</td><td>${b.cn.toLocaleString()}</td><td>${b.sg.toLocaleString()}</td><td>${b.my.toLocaleString()}</td></tr>`).join('');
   for (const id of ['x','y','adj']) $(id).addEventListener('input', draw);
   addEventListener('resize', draw);
 }
@@ -187,8 +197,9 @@ function heat(){
   const ys = Object.keys(OUT), adj = $('adj').checked, xk = $('x').value, yk = $('y').value;
   $('hmode').textContent = adj ? ' 当前显示：控制其他因素之后。' : ' 当前显示：直接相关。';
   $('heat').innerHTML = `<tr><th>人口构成</th>${ys.map(y => `<th>${OUT[y][0]}</th>`).join('')}</tr>` +
-    GROUPS.map(g => `<tr><td>${NAMES[g]}</td>${ys.map(y => { const p = pair(g, y), r = adj ? p.adj : p.raw;
-      return `<td class="c${g === xk && y === yk ? ' sel' : ''}" style="background:${color(r)}" data-x="${g}" data-y="${y}">${r.toFixed(2)}</td>`; }).join('')}</tr>`).join('');
+    SECT.map(([t, m]) => `<tr><td colspan="${ys.length + 1}" style="text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;padding-top:12px">${t}</td></tr>` +
+      Object.keys(m).map(g => `<tr><td>${NAMES[g]}</td>${ys.map(y => { const p = pair(g, y), r = adj ? p.adj : p.raw;
+        return `<td class="c${g === xk && y === yk ? ' sel' : ''}" style="background:${color(r)}" data-x="${g}" data-y="${y}">${r.toFixed(2)}</td>`; }).join('')}</tr>`).join('')).join('');
   for (const td of $('heat').querySelectorAll('td.c')) td.onclick = () => { $('x').value = td.dataset.x; $('y').value = td.dataset.y; draw(); };
 }
 // residual ticks: signed, and in thousands when the scale is large (income, price)

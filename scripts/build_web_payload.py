@@ -16,7 +16,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from osm_layers import load as load_osm, is_premium  # noqa: E402
 from nuisance import Nuisance  # noqa: E402
 from supply import Supply  # noqa: E402
-from demand import Demand, ethnic_shares, ETH_ALL  # noqa: E402
+from demand import Demand, ethnic_shares, ETH_ALL, lsoa_extra  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, PROC = ROOT / "data" / "raw", ROOT / "data" / "processed"
@@ -103,6 +103,8 @@ def main():
             "ow": ("owned_pct", 1), "pr": ("private_rent_pct", 1),
             "p": ("median", 0), "nb": ("new_pct", 0), "t": ("turnover", 1)}
     eth, _ = ethnic_shares()
+    eth = eth.join(lsoa_extra())
+    ETH_ALL = list(eth.columns)
     for k in ETH_ALL:
         KEYS["e_" + k] = (None, 1)
     hit = 0

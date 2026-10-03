@@ -42,6 +42,11 @@ TABLES = [
     # Caribbean, African, other Black; White British, Irish, other White; Arab, other).
     # TS004 country of birth, only to split UK-born (1) from the rest.
     ("NM_2024_1", "cob", "c2021_cob_12", "0,1"),
+    # TS030 religion, TS029 English proficiency, TS003 household composition: the rest of
+    # who lives somewhere, for the population-analysis page.
+    ("NM_2049_1", "religion", "c2021_religion_10", "0,1,2,3,4,5,6,7,8,9"),
+    ("NM_2048_1", "engprf", "c2021_engprf_6", "0,1001,4,5"),
+    ("NM_2023_1", "hhcomp", "c2021_hhcomp_15", "0,1,2,4,5,7,8,10,13,14"),
     ("NM_2041_1", "ethnic", "c2021_eth_20", "0,1001,1002,1003,1004,1005,10,11,12,13,14,15,16,17,1,2,5,18,19"),
 ]
 URL = ("https://www.nomisweb.co.uk/api/v01/dataset/{ds}.data.csv"

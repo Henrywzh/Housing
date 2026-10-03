@@ -59,6 +59,24 @@ def ethnic_shares():
     return sh, e[0]
 
 
+def lsoa_extra():
+    """LSOA -> %: born outside the UK, religion (of residents), main language not English,
+    poor English, and household types (of households). Keys are the short names the
+    analysis page and the map's colouring both use."""
+    cob = pd.read_csv(RAW / "lsoa_cob.csv").pivot_table(index="GEOGRAPHY_CODE", columns="C2021_COB_12", values="OBS_VALUE")
+    d = pd.DataFrame({"nb": 100 * (1 - cob[1] / cob[0])})
+    rel = pivot("lsoa_religion", "c2021_religion_10")
+    for k, c in (("rn0", 1), ("rch", 2), ("rbu", 3), ("rhi", 4), ("rje", 5), ("rmu", 6), ("rsi", 7)):
+        d[k] = 100 * rel[c] / rel[0]
+    eng = pivot("lsoa_engprf", "c2021_engprf_6")
+    d["nl"] = 100 * eng[1001] / eng[0]
+    d["pe"] = 100 * (eng[4] + eng[5]) / eng[0]
+    hh = pivot("lsoa_hhcomp", "c2021_hhcomp_15")
+    for k, cs in (("h1o", [1]), ("h1", [2]), ("hnc", [4, 7]), ("hdc", [5, 8, 10, 13]), ("hlp", [10]), ("hst", [14])):
+        d[k] = 100 * hh[cs].sum(axis=1) / hh[0]
+    return d
+
+
 class Demand:
     def __init__(self):
         pc = pd.read_csv(RAW / "postcodes.csv", usecols=["postcode", "lat", "lon", "lsoa", "msoa"])
