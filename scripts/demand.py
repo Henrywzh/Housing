@@ -47,10 +47,16 @@ ETH = {"as": 1001, "ch": 13, "in": 10, "pk": 11, "bd": 12, "oa": 14,
        "mx": 1003, "wh": 1004, "wb": 1, "ir": 2, "wo": 5, "ar": 18, "ot": 19}
 
 
+ETH_ALL = [*ETH, "ax"]
+
+
 def ethnic_shares():
-    """LSOA -> % of residents in each ethnic group (rows are the ETH keys)."""
+    """LSOA -> % of residents in each ethnic group (columns are ETH_ALL).
+    "ax" is Asian other than Chinese, so Chinese and the rest can be told apart."""
     e = pivot("lsoa_ethnic", "c2021_eth_20")
-    return pd.DataFrame({k: 100 * e[c] / e[0] for k, c in ETH.items()}), e[0]
+    sh = pd.DataFrame({k: 100 * e[c] / e[0] for k, c in ETH.items()})
+    sh["ax"] = sh["as"] - sh["ch"]
+    return sh, e[0]
 
 
 class Demand:
@@ -118,7 +124,7 @@ class Demand:
             e = self.eth.iloc[ex]
             if e["pop"].sum() >= 500:
                 w = e["pop"] / e["pop"].sum()
-                out["eth"] = {k: round(float((e[k] * w).sum()), 1) for k in ETH}
+                out["eth"] = {k: round(float((e[k] * w).sum()), 1) for k in ETH_ALL}
         jx = self.mt.query_ball_point(p, 1500)
         if jx:
             s = self.m.iloc[jx][["d", "fi", "tc"]].sum()

@@ -16,7 +16,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from osm_layers import load as load_osm, is_premium  # noqa: E402
 from nuisance import Nuisance  # noqa: E402
 from supply import Supply  # noqa: E402
-from demand import Demand, ethnic_shares, ETH  # noqa: E402
+from demand import Demand, ethnic_shares, ETH_ALL  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW, PROC = ROOT / "data" / "raw", ROOT / "data" / "processed"
@@ -103,13 +103,13 @@ def main():
             "ow": ("owned_pct", 1), "pr": ("private_rent_pct", 1),
             "p": ("median", 0), "nb": ("new_pct", 0), "t": ("turnover", 1)}
     eth, _ = ethnic_shares()
-    for k in ETH:
+    for k in ETH_ALL:
         KEYS["e_" + k] = (None, 1)
     hit = 0
     for f in geo["features"]:
         code = f["properties"]["c"]
         if code in eth.index:
-            for k in ETH:
+            for k in ETH_ALL:
                 v = eth.at[code, k]
                 if v == v:
                     f["properties"]["e_" + k] = round(float(v), 1)
@@ -136,7 +136,7 @@ def main():
         for k, (c, _) in KEYS.items() if c is not None}
     # Ethnic shares are continuous and have no pile-up at zero, so seven quantile
     # bands (about the same number of LSOAs in each) read well for every group.
-    for k in ETH:
+    for k in ETH_ALL:
         breaks["e_" + k] = [round(float(v), 1) for v in
                             eth[k].dropna().quantile([i / 7 for i in range(1, 7)]).tolist()]
     # Two thirds of LSOAs have sold no new-build at all since 2019, so quantile

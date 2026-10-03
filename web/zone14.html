@@ -270,8 +270,9 @@ label.chk input{accent-color:var(--signal)}
           <option value="e_wb">　英格兰/威尔士/苏格兰/北爱/英国白人</option>
           <option value="e_ir">　爱尔兰裔白人</option>
           <option value="e_wo">　其他白人</option>
-          <option value="e_as">亚裔 Asian（合计）</option>
+          <option value="e_as">亚裔 Asian（合计，含华裔）</option>
           <option value="e_ch">　华裔 Chinese</option>
+          <option value="e_ax">　其他亚裔合计（不含华裔）</option>
           <option value="e_in">　印度裔 Indian</option>
           <option value="e_pk">　巴基斯坦裔 Pakistani</option>
           <option value="e_bd">　孟加拉裔 Bangladeshi</option>
@@ -303,6 +304,7 @@ label.chk input{accent-color:var(--signal)}
       <label class="chk"><input type="checkbox" id="lyPrem" checked> Waitrose / M&amp;S</label>
       <label class="chk"><input type="checkbox" id="lyMkt"> 所有超市（放大后）</label>
       <label class="chk"><input type="checkbox" id="lyHome" checked> 楼盘与房源</label>
+      <label class="chk"><input type="checkbox" id="lySch"> 中小学（颜色 = Ofsted + 成绩）</label>
     </div>
 
     <div class="block" id="railBlock">
@@ -376,6 +378,7 @@ label.chk input{accent-color:var(--signal)}
       <div class="row"><span class="w">便宜</span><input type="range" id="wCheap" min="0" max="3" step="1" value="1" aria-label="便宜权重"></div>
       <div class="row"><span class="w" title="8:40 到 Green Park 的通勤时间">通勤</span><input type="range" id="wConv" min="0" max="3" step="1" value="1" aria-label="通勤权重"></div>
       <div class="row"><span class="w" title="附近新房供给少为好；只在「出租·转手」口径里计入">供给</span><input type="range" id="wSup" min="0" max="3" step="1" value="1" aria-label="供给权重"></div>
+      <div class="row"><span class="w" title="1 公里内最好的小学、3 公里内最好的中学（不含选拔制和宗教学校），按 Ofsted 与考试成绩；只在「出租·转手」口径里计入">学校</span><input type="range" id="wSch" min="0" max="3" step="1" value="1" aria-label="学校权重"></div>
       <div class="row"><span class="w" title="1 公里内的居民职业与行业、2 公里内的就业人口；只在「出租·转手」口径里计入">需求</span><input type="range" id="wDem" min="0" max="3" step="1" value="1" aria-label="需求权重"></div>
     </div>
 
@@ -540,7 +543,7 @@ const METRIC = {
 // Census 2021 ethnic group (TS021): share of each LSOA's usual residents. Bands are the
 // seven quantiles of that group across London's LSOAs, so every group uses the whole ramp.
 const ETH_NAME = {wh:'白人', wb:'英国白人（英格兰/威尔士/苏格兰/北爱）', ir:'爱尔兰裔白人', wo:'其他白人',
-  as:'亚裔', ch:'华裔', in:'印度裔', pk:'巴基斯坦裔', bd:'孟加拉裔', oa:'其他亚裔',
+  as:'亚裔（含华裔）', ch:'华裔', ax:'亚裔（不含华裔）', in:'印度裔', pk:'巴基斯坦裔', bd:'孟加拉裔', oa:'其他亚裔',
   bk:'黑人', af:'非洲裔', cb:'加勒比裔', ob:'其他黑人', mx:'混血', ar:'阿拉伯裔', ot:'其他族裔'};
 for (const [k, nm] of Object.entries(ETH_NAME))
   METRIC['e_' + k] = {t:nm + ' %', f:v => (v < 10 ? v.toFixed(1) : v.toFixed(0)) + '%',
@@ -548,8 +551,8 @@ for (const [k, nm] of Object.entries(ETH_NAME))
 
 const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
                unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,
-               layers:{line:true, stn:true, prem:true, mkt:false, home:true},
-               w:{safe:1, cheap:1, conv:1, sup:1, dem:1}, phase:'live', noNu:false};
+               layers:{line:true, stn:true, prem:true, mkt:false, home:true, sch:false},
+               w:{safe:1, cheap:1, conv:1, sup:1, dem:1, sch:1}, phase:'live', noNu:false};
 
 /* ---------- scoring ---------- */
 function percentiles(vals){
@@ -594,15 +597,72 @@ const demScore = o => { if (!o.dm) return null;
 // Over 12% means the price is a part-share or a data slip, not a flat: left blank rather than shown.
 const yieldOf = (o, price) => { const y = (o.dm && o.dm.rent && price) ? 12 * o.dm.rent / price * 100 : null;
   return y != null && y <= 12 ? y : null; };
+/* ---------- schools ----------
+   q is one 0-1 number per school: Ofsted and exam results, each ranked within its phase,
+   averaged (build_schools.py). A place scores on the best primary within 1 km and the best
+   secondary within 3 km, counting only schools that admit by distance in the first place:
+   selective and faith schools are listed but not scored, because living next to one does
+   not get a child a place. */
+let SCH = [];
+const schDist = (y, x, s) => Math.hypot((s.x - x) * Math.cos(51.5 * Math.PI / 180), s.y - y) * 111320;
+const posOf = o => [o.y ?? o.lat, o.x ?? o.lon];
+function schNear(o, R, ph){
+  const [y, x] = posOf(o), out = [];
+  for (const s of SCH){
+    if (s.p !== ph) continue;
+    if (Math.abs(s.y - y) > R / 111320 * 1.05) continue;
+    const m = schDist(y, x, s);
+    if (m <= R) out.push({s, m: Math.round(m)});
+  }
+  return out;
+}
+const schOpen = s => !s.sel && !s.fa;
+function schRaw(o){
+  const best = (R, ph) => { const v = schNear(o, R, ph).filter(r => schOpen(r.s) && r.s.q != null).map(r => r.s.q); return v.length ? Math.max(...v) : null; };
+  const p = best(1000, 'P'), q = best(3000, 'S');
+  const v = [p, q].filter(a => a != null);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+function schScoreAll(){
+  if (!SCH.length) return;
+  const all = [...S, ...SC];
+  for (const o of all) if (o._sr === undefined) o._sr = schRaw(o);
+  const rk = percentiles(all.map(o => o._sr));
+  for (const o of all) o.schS = o._sr == null ? null : rk(o._sr);
+}
+const OL = {oeif:'旧评级', rc:'新报告卡', ung:'简检'};
+const olText = s => { if (!s.ol) return '<span class="na">无 Ofsted 评级</span>';
+  const g = {Outstanding:'优秀', Good:'良好', 'Requires improvement':'需改进', Inadequate:'不合格',
+             'remains Outstanding':'维持优秀', 'remains Good':'维持良好', 'Standards maintained':'水平维持',
+             'Improved significantly':'明显进步', 'report card':'新报告卡'}[s.ol] || s.ol;
+  return `${g}<span class="na"> · ${s.od || ''}${s.ok === 'ung' ? ' 简检' : ''}</span>`; };
+const resText = s => s.p === 'P'
+  ? (s.r != null ? `阅读写作数学达标 ${s.r}%<span class="na"> · 三年均 ${s.r2 ?? '—'}%</span>` : '<span class="na">无成绩</span>')
+  : (s.r != null ? `Attainment 8 ${s.r}` : '') + (s.r2 != null ? `<span class="na"> · Progress 8 ${s.r2}（2023/24）</span>` : '') || '<span class="na">无成绩</span>';
+const schTags = s => [s.sel ? '选拔制' : null, s.fa ? s.fa + ' 学校' : null, s.sf ? '含 sixth form' : null].filter(Boolean)
+  .map(t => `<span class="pill z">${t}</span>`).join(' ');
+function schRows(o, R, ph, n){
+  const list = schNear(o, R, ph).sort((a, b) => (b.s.q ?? -1) - (a.s.q ?? -1)).slice(0, n);
+  return list.map(({s, m}) => `<tr><td><a href="https://reports.ofsted.gov.uk/provider/21/${s.u}" target="_blank" rel="noopener">${s.n}</a>
+      <div class="na" style="font-size:11px">${m} 米 · ${olText(s)}</div>
+      <div class="na" style="font-size:11px">${resText(s)} ${schTags(s)}</div></td>
+      <td class="n">${s.q != null ? Math.round(s.q * 100) : '—'}</td></tr>`).join('');
+}
+const schKv = o => { if (!SCH.length) return '';
+  const pr = schRows(o, 1000, 'P', 3), se = schRows(o, 3000, 'S', 3);
+  return `<table class="ptab"><tr><td class="na">小学 · 1 公里内质量最高的 3 所</td><td class="na n">综合</td></tr>${pr || '<tr><td class="na">1 公里内没有小学</td><td></td></tr>'}
+    <tr><td class="na">中学 · 3 公里内质量最高的 3 所</td><td class="na n"></td></tr>${se || '<tr><td class="na">3 公里内没有中学</td><td></td></tr>'}</table>
+  <p class="caveat" style="margin-top:2px">综合 = Ofsted 与考试成绩各按同类学校排名后取平均（0–100）。Ofsted 自 2024 年 9 月起不再给总评，2025 年 11 月起改用分项报告卡，所以有的学校是旧评级、有的是新报告卡，日期写在后面。
+    <b>招生范围（catchment）没有全国数据</b>：每所学校按自己的招生规则，小学通常看「最后录取距离」，由各区议会每年单独公布。这里只给直线距离，不代表能入读。</p>`; };
 // Ethnic mix within 1 km: five broad groups as a bar, the detailed ones as rows.
-const ETH_BROAD = [['wh','白人','#8a9ba8'], ['as','亚裔','#c98a3a'], ['bk','黑人','#4a7c59'], ['mx','混血','#8a5aa8'], ['ox','其他','#b0624a']];
+const ETH_BROAD = [['wh','白人','#8a9ba8'], ['ch','华裔','#d4a017'], ['ax','其他亚裔','#c0722a'], ['bk','黑人','#4a7c59'], ['mx','混血','#8a5aa8'], ['ox','其他','#b0624a']];
 const ethKv = o => { const e = o.dm && o.dm.eth; if (!e) return '';
   const v = {...e, ox: Math.round((e.ar + e.ot) * 10) / 10};
   const row = (k, name) => `<dt>${name}</dt><dd>${e[k]}%</dd>`;
   return `<div class="ethbar" style="display:flex;height:10px;border-radius:3px;overflow:hidden;margin:2px 0 6px">${ETH_BROAD.map(([k,, c]) => `<i style="width:${v[k]}%;background:${c}" title="${v[k]}%"></i>`).join('')}</div>
   <dl class="kv">
   ${ETH_BROAD.map(([k, n, c]) => `<dt><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c};margin-right:5px"></i>${n}</dt><dd>${v[k]}%</dd>`).join('')}
-  <dt class="na">　华裔 / 印度 / 巴基斯坦 / 孟加拉</dt><dd class="na">${e.ch} / ${e.in} / ${e.pk} / ${e.bd}%</dd>
+  <dt class="na">　其他亚裔：印度 / 巴基斯坦 / 孟加拉 / 其他</dt><dd class="na">${e.in} / ${e.pk} / ${e.bd} / ${e.oa}%</dd>
   <dt class="na">　非洲 / 加勒比</dt><dd class="na">${e.af} / ${e.cb}%</dd>
   <dt class="na">　英国白人 / 其他白人</dt><dd class="na">${e.wb} / ${e.wo}%</dd></dl>
   <p class="caveat" style="margin-top:2px">1 公里内常住人口，Census 2021 自报族裔。仅作人口构成参考，不进评分。地图左栏「着色」里可单独看每个族裔。</p>`; };
@@ -652,6 +712,7 @@ function score(){
   EMP_RANK = percentiles(S.map(s => best3(s.gp ? s.gp.min : null, s.cw, s.ls)));
   SUP_RANK = percentiles([...S.map(s => s.sup && s.sup.r), ...SC.map(x => x.sup && x.sup.r)]);
   demInit();
+  schScoreAll();
   for (const s of S){
     s.safe  = s.home  == null ? null : 1 - pHome(s.home);
     s.cheap = s.price == null ? null : 1 - pPrice(s.price);
@@ -743,7 +804,7 @@ function passesScheme(x){
 
 function composite(s){
   const w = state.w, parts = [[s.safe,w.safe],[s.cheap,w.cheap],[s.conv,w.conv]];
-  if (state.phase === 'let') parts.push([s.supS, w.sup], [s.demS, w.dem]);
+  if (state.phase === 'let') parts.push([s.supS, w.sup], [s.demS, w.dem], [s.schS, w.sch]);
   let n = 0, d = 0;
   for (const [v,k] of parts) if (v != null && k > 0){ n += v*k; d += k; }
   return d ? Math.max(0, n/d - nuPen(s)) : null;
@@ -954,6 +1015,7 @@ function selectDev(d){
         <div class="na" style="font-size:11px">${d.gp.route} · 其中步行 ${d.gp.walk} 分 · TfL 工作日 8:40 前到达</div></dd>` : ''}
       ${d.cw != null || d.ls != null ? `<dt>到 Canary Wharf / Liverpool St</dt><dd>${d.cw ?? '—'} / ${d.ls ?? '—'} 分钟</dd>` : ''}
       ${nuText(d).length ? `<dt>负面邻居</dt><dd>${nuPills(d)}</dd>` : ''}
+      ${SCH.length ? `<dt>附近学校</dt><dd>${(() => { const a = schNear(d, 1000, 'P').filter(r => schOpen(r.s) && r.s.q != null).sort((p, q) => q.s.q - p.s.q)[0]; return a ? '最好的小学 ' + a.s.n + '（' + a.m + ' 米，综合 ' + Math.round(a.s.q * 100) + '）' : '1 公里内无小学'; })()}</dd>` : ''}
       ${d.dm ? `<dt>附近需求</dt><dd>2 公里内就业 ${d.dm.jb} 千${d.dm.fi != null ? ' · 居民金融业 ' + d.dm.fi + '%' : ''}${d.dm.pr != null ? ' · 管理/专业 ' + d.dm.pr + '%' : ''}${yieldOf(d, d.from) != null ? ' · 毛收益率约 ' + yieldOf(d, d.from).toFixed(1) + '%（按起价）' : ''}</dd>` : ''}
       ${d.sup ? `<dt>附近新房供给</dt><dd>近三年成交 ${d.sup.n3.toLocaleString()} 套${d.sup.r != null ? ' · 占住户 ' + d.sup.r + '%' : ''}${d.sup.pu != null ? ' · 在途 ' + d.sup.pu.toLocaleString() + ' 套已获批' : ''}${d.sup.dv > 1 ? ' · 另有 ' + (d.sup.dv - 1) + ' 个新盘在售' : ''}</dd>` : ''}
       ${Object.keys(byBeds).length ? `<dt>按户型起价</dt><dd>${Object.entries(byBeds)
@@ -1222,9 +1284,10 @@ function selectScheme(x){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${x.s}</h2>
     <div class="where">${x.st_name} · ${x.pc} · ${x.st} 步行 ${x.d} 米 · Zone ${x.z}${x.gp != null ? ` · 8:40 到 Green Park 约 ${x.gp} 分钟` : ''}</div>
-    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}${bar('供给', x.supS)}${bar('需求', x.demS)}</div>
+    <div class="bars">${bar('安全', x.safe)}${bar('便宜', x.cheap)}${bar(BARLAB(), x.conv)}${bar('供给', x.supS)}${bar('需求', x.demS)}${bar('学校', x.schS)}</div>
     ${nuText(x).length ? `<p class="caveat">${nuText(x).map(t => '⚠ 附近有 ' + t).join('；')}。每个扣综合分 10 分（上限 30）。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(x.gp, x.cw, x.ls)}
+    <div class="sect">附近学校</div>${schKv(x)}
     <div class="sect">附近需求 · 谁会租、谁会买</div>${demKv(x, x.price)}
     <div class="sect">人口构成 · 族裔</div>${ethKv(x)}
     <div class="sect">附近供给 · 1 公里</div>${supKv(x)}
@@ -1279,9 +1342,10 @@ function select(s){
   d.innerHTML = `<button class="close" aria-label="关闭">&times;</button>
     <h2>${s.n}</h2>
     <div class="where">Zone ${s.z} · ${s.pop.toLocaleString()} 人住在步行 800 米内</div>
-    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}${bar('供给', s.supS)}${bar('需求', s.demS)}</div>
+    <div class="bars">${bar('安全', s.safe)}${bar('便宜', s.cheap)}${bar(BARLAB(), s.conv)}${bar('供给', s.supS)}${bar('需求', s.demS)}${bar('学校', s.schS)}</div>
     ${nuText(s).length ? `<p class="caveat">${nuText(s).map(t => '⚠ 车站附近有 ' + t).join('；')}。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(s.gp ? s.gp.min : null, s.cw ?? null, s.ls ?? null)}
+    <div class="sect">附近学校</div>${schKv(s)}
     <div class="sect">附近需求 · 谁会租、谁会买</div>${demKv(s, s.price)}
     <div class="sect">人口构成 · 族裔</div>${ethKv(s)}
     <div class="sect">附近供给 · 1 公里</div>${supKv(s)}
@@ -1372,9 +1436,9 @@ function wire(){
     state.layers = {line:$('#lyLine').checked, rail:$('#lyRail').checked,
                     stn:$('#lyStn').checked,
                     prem:$('#lyPrem').checked,
-                    mkt:$('#lyMkt').checked, home:$('#lyHome').checked};
+                    mkt:$('#lyMkt').checked, home:$('#lyHome').checked, sch:$('#lySch').checked};
     state.soon = $('#homeSoon').checked;
-    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value, sup:+$('#wSup').value, dem:+$('#wDem').value};
+    state.w = {safe:+$('#wSafe').value, cheap:+$('#wCheap').value, conv:+$('#wConv').value, sup:+$('#wSup').value, dem:+$('#wDem').value, sch:+$('#wSch').value};
     $('#priceV').textContent = state.pmin <= 100 && state.pmax >= 1000 ? '不限'
       : state.pmin <= 100 ? '≤ £' + state.pmax + 'k' : state.pmax >= 1000 ? '≥ £' + state.pmin + 'k'
       : '£' + state.pmin + 'k – £' + state.pmax + 'k';
@@ -1390,6 +1454,7 @@ function wire(){
                               ['grocer-dot', state.layers.prem], ['grocer-label', state.layers.prem],
                               ['market-dot', state.layers.mkt],
                               ['dev-icon', state.layers.home], ['dev-label', state.layers.home],
+                              ['school-dot', state.layers.sch], ['school-label', state.layers.sch],
                               ['stations-label', state.layers.stn]])
         MAP.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
       $('#railBlock').classList.toggle('off', !state.layers.rail);
@@ -1398,8 +1463,8 @@ function wire(){
     draw();
   };
   for (const id of ['tmax','crime','prem','multi','unk','noNu','op',
-                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','homeSoon','railStn',
-                    'wSafe','wCheap','wConv','wSup','wDem'])
+                    'lyLine','lyRail','lyStn','lyPrem','lyMkt','lyHome','lySch','homeSoon','railStn',
+                    'wSafe','wCheap','wConv','wSup','wDem','wSch'])
     $('#' + id).addEventListener('input', () => { sync(); saveFilter(); });
   // The two price handles cannot cross: dragging one past the other pushes it.
   $('#pmin').addEventListener('input', () => {
@@ -1566,7 +1631,7 @@ async function boot(){
   const opt = {cache:'no-cache'};
   const j = p => fetch(p, opt).then(r => r.json());
   note('底图 14.7 MB…');
-  const [buffer, lsoa, bor, stations, amen, breaks, schemes, lines, short, devs] =
+  const [buffer, lsoa, bor, stations, amen, breaks, schemes, lines, short, devs, schools] =
     await Promise.all([
       fetch('data/london.pmtiles.wasm', opt).then(r => r.arrayBuffer()),
       j('data/lsoa.geojson'), j('data/boroughs.geojson'), j('data/stations.json'),
@@ -1574,8 +1639,9 @@ async function boot(){
       j('data/schemes.json').catch(() => []),
       j('data/lines.geojson').catch(() => ({type:'FeatureCollection', features:[]})),
       j('data/shortlist.json').catch(() => null),
-      j('data/devs.json').catch(() => null)]);
-  S = stations; AM = amen; BREAKS = breaks; SHORT = short; DEV = devs;
+      j('data/devs.json').catch(() => null),
+      j('data/schools.json').catch(() => [])]);
+  S = stations; AM = amen; BREAKS = breaks; SHORT = short; DEV = devs; SCH = schools;
   SC = schemes; SC.forEach((x, i) => x.i = i);
   LGROUPS = SHORT ? groupListings(SHORT.listings) : [];
   score(); scoreSchemes();
@@ -1732,11 +1798,29 @@ async function boot(){
               'text-anchor':'left', 'text-offset':[1.4, 0], 'text-justify':'left', 'text-optional':true},
       paint:{'text-color':['get','color'], 'text-halo-color':'#ffffff', 'text-halo-width':1.6}});
 
+    // Schools, optional: the colour is the school's own 0-1 quality number.
+    MAP.addSource('schools', {type:'geojson', data:{type:'FeatureCollection', features:SCH.map((s, i) => ({
+      type:'Feature', geometry:{type:'Point', coordinates:[s.x, s.y]},
+      properties:{i, n:s.n, q:s.q ?? -1, p:s.p}}))}});
+    MAP.addLayer({id:'school-dot', type:'circle', source:'schools', minzoom:11.5, layout:{visibility:'none'},
+      paint:{'circle-radius':['interpolate', ['linear'], ['zoom'], 11.5, 2.5, 15, 6],
+             'circle-color':['step', ['get','q'], '#9aa3ab', 0, '#c2402a', 0.4, '#d89a2b', 0.6, '#8bb04a', 0.8, '#2f7d4f'],
+             'circle-stroke-color':['case', ['==', ['get','p'], 'S'], '#16202b', '#ffffff'],
+             'circle-stroke-width':['case', ['==', ['get','p'], 'S'], 1.6, 0.8]}});
+    MAP.addLayer({id:'school-label', type:'symbol', source:'schools', minzoom:14, layout:{visibility:'none',
+      'text-field':['get','n'], 'text-font':['NotoSansMedium'], 'text-size':10.5, 'text-offset':[0, 1], 'text-anchor':'top'},
+      paint:{'text-color':'#16202b', 'text-halo-color':'#ffffff', 'text-halo-width':1.4}});
+    MAP.on('click', 'school-dot', e => {
+      const s = SCH[e.features[0].properties.i];
+      new maplibregl.Popup({closeButton:false, maxWidth:'280px'}).setLngLat([s.x, s.y]).setHTML(
+        `<div style="font:12px/1.45 Archivo,sans-serif;color:#16202b"><b>${s.n}</b><br>${s.p === 'P' ? '小学' : '中学'} · ${s.la}${s.np ? ' · ' + s.np + ' 人' : ''}<br>
+         Ofsted：${olText(s)}<br>${resText(s)}<br>${schTags(s)}<br><a href="https://reports.ofsted.gov.uk/provider/21/${s.u}" target="_blank" rel="noopener">Ofsted 报告</a></div>`).addTo(MAP);
+    });
     MAP.on('click', 'stations-dot', e => select(S.find(s => s.n === e.features[0].properties.n)));
     MAP.on('click', 'listing-dot', e => selectGroup(LGROUPS[e.features[0].properties.i]));
     MAP.on('click', 'scheme-dot', e => selectScheme(SC[e.features[0].properties.i]));
     MAP.on('click', 'dev-icon', e => selectDev(DEV.developments[e.features[0].properties.i]));
-    for (const id of ['scheme-dot', 'grocer-dot', 'market-dot']){
+    for (const id of ['scheme-dot', 'grocer-dot', 'market-dot', 'school-dot']){
       MAP.on('mouseenter', id, () => MAP.getCanvas().style.cursor = 'pointer');
       MAP.on('mouseleave', id, () => MAP.getCanvas().style.cursor = '');
     }
