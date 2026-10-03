@@ -236,6 +236,7 @@ label.chk input{accent-color:var(--signal)}
     <nav id="tabs" role="tablist" aria-label="视图">
       <button role="tab" data-tab="map" aria-selected="true">车站地图 · Zone 1–6</button>
       <button role="tab" data-tab="trend" aria-selected="false">房价走势 · 1995–2026</button>
+      <button role="tab" data-tab="analysis" aria-selected="false">人口分析</button>
     </nav>
     <div class="sub" id="sub">每个车站步行 800 米内的治安、成交价与生活设施</div>
     <div class="stamp" id="stamp">—</div>
@@ -1597,17 +1598,20 @@ function styleFor(buffer){
 // The hash carries the tab so a link can open straight onto the trend view and
 // the back button walks between the two.
 const SUBS = {map:'每个车站步行 800 米内的治安、成交价与生活设施',
-              trend:'32 个区 + City · 房价、租金与成交 1995–2026'};
+              trend:'32 个区 + City · 房价、租金与成交 1995–2026',
+              analysis:'人口构成与收入、职业、犯罪、房价的关联 · Census 2021'};
+// the two full-page views share one frame, pointed at whichever was asked for
+const FRAME = {trend:['data/trend.html', '伦敦房价租金地图'], analysis:['data/analysis.html', '人口分析']};
 function showTab(t){
   if (!(t in SUBS)) t = 'map';
-  $('#app').classList.toggle('trend', t === 'trend');
+  $('#app').classList.toggle('trend', t in FRAME);
   for (const b of document.querySelectorAll('#tabs button'))
     b.setAttribute('aria-selected', String(b.dataset.tab === t));
   $('#sub').textContent = SUBS[t];
-  if (t === 'trend' && !$('#trend iframe')) {
-    const f = document.createElement('iframe');
-    f.src = 'data/trend.html'; f.title = '伦敦房价租金地图';
-    $('#trend').appendChild(f);
+  if (t in FRAME) {
+    let f = $('#trend iframe');
+    if (!f) { f = document.createElement('iframe'); $('#trend').appendChild(f); }
+    if (f.dataset.tab !== t) { f.dataset.tab = t; f.src = FRAME[t][0]; f.title = FRAME[t][1]; }
   }
   // Resize now, not on the next frame: a map booted behind the trend tab (a
   // link straight to #trend) measured a hidden container and needs the real one.

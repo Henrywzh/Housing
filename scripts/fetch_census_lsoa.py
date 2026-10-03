@@ -40,6 +40,8 @@ TABLES = [
     # TS021 ethnic group: the five broad groups (1001-1005) and the detailed ones
     # worth separating (Indian, Pakistani, Bangladeshi, Chinese, other Asian;
     # Caribbean, African, other Black; White British, Irish, other White; Arab, other).
+    # TS004 country of birth, only to split UK-born (1) from the rest.
+    ("NM_2024_1", "cob", "c2021_cob_12", "0,1"),
     ("NM_2041_1", "ethnic", "c2021_eth_20", "0,1001,1002,1003,1004,1005,10,11,12,13,14,15,16,17,1,2,5,18,19"),
 ]
 URL = ("https://www.nomisweb.co.uk/api/v01/dataset/{ds}.data.csv"
