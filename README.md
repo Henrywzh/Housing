@@ -59,8 +59,33 @@ not carry — the two drifted apart once and the map silently rendered blank.
 
 ## Monthly refresh
 
-Replace the two files in `data/raw/` after the ONS release, then rerun
-`build_dataset.py` and `build_site.py`.
+One command does it, and says what changed:
+
+```bash
+python3 scripts/update_monthly.py             # prices, rents, rates, radar, trend page
+python3 scripts/update_monthly.py --devs      # + developers' listings and TfL times (slow)
+python3 scripts/update_monthly.py --ppd       # + Price Paid and what is built on it
+python3 scripts/update_monthly.py --if-new    # do nothing unless Land Registry has a new month
+python3 scripts/update_monthly.py --dry-run   # list the steps
+```
+
+It downloads the newest Land Registry HPI and ONS rents file, refreshes the Bank of England, Nationwide
+and HMRC series, rebuilds the borough panel, the price-trend page and the market radar, checks the outputs,
+and copies the previous versions of the published files to `data/processed/prev/` so a bad month can be
+rolled back. A failing step skips only what depends on it. Logs: `data/processed/logs/`.
+
+To run it by itself, `scripts/com.housing.monthly.plist` starts `scripts/run_monthly.sh` every morning at
+09:00; the script acts on the 4th (full refresh) and on the 17th-25th (only if a new HPI month is out), and
+shows a notification. Install:
+
+```bash
+cp scripts/com.housing.monthly.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.housing.monthly.plist
+```
+
+Remove with `launchctl bootout gui/$(id -u)/com.housing.monthly`. Republishing the Artifact is not automatic
+(it needs a Claude session); the last lines of a run list the files that changed since the last publish, and
+`update_monthly.py --mark-published` records that they went out.
 
 ## Caveats that matter
 

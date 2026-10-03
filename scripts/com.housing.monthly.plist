@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.housing.monthly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>/Users/henrywzh/Desktop/Python/Housing/scripts/run_monthly.sh</string>
+  </array>
+  <!-- every day at 09:00; the script itself decides whether the day matters. A Mac that was asleep runs it on waking. -->
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/Users/henrywzh/.pyenv/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>StandardOutPath</key><string>/Users/henrywzh/Desktop/Python/Housing/data/processed/logs/launchd.out</string>
+  <key>StandardErrorPath</key><string>/Users/henrywzh/Desktop/Python/Housing/data/processed/logs/launchd.err</string>
+</dict>
+</plist>

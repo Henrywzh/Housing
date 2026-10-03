@@ -23,8 +23,9 @@ RAW = ROOT / "data" / "raw"
 OUT = ROOT / "data" / "processed"
 OUT.mkdir(parents=True, exist_ok=True)
 
-HPI_FILE = RAW / "UK-HPI-full-file-2026-07.csv"
-PIPR_FILE = RAW / "pipr-2026-09.xlsx"
+# the newest of each, by the date in its name (update_monthly.py downloads a new one each month)
+HPI_FILE = sorted(RAW.glob("UK-HPI-full-file-*.csv"))[-1]
+PIPR_FILE = sorted(RAW.glob("pipr-*.xlsx"))[-1]
 GEO_FILE = RAW / "london_lad_bgc.geojson"
 
 # ---------------------------------------------------------------- house prices
@@ -355,8 +356,8 @@ payload = {
     "social_sub": social_sub,
     "london_flat": london_flat,
     "meta": {
-        "hpi_vintage": "2026-07 (HM Land Registry UK HPI, published 2026-09-16)",
-        "pipr_vintage": "2026-08 (ONS Price Index of Private Rents, published 2026-09-16)",
+        "hpi_vintage": f"{HPI_FILE.stem[-7:]} (HM Land Registry UK HPI)",
+        "pipr_vintage": f"{pipr['ym'].max()} (ONS Price Index of Private Rents, file {PIPR_FILE.stem[-7:]})",
         "price_history_from": min(m for m in months),
         "rent_history_from": "2015-01",
     },
