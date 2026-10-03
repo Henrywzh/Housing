@@ -246,6 +246,7 @@ label.chk input{accent-color:var(--signal)}
       <button role="tab" data-tab="map" aria-selected="true">车站地图 · Zone 1–6</button>
       <button role="tab" data-tab="trend" aria-selected="false">房价走势 · 1995–2026</button>
       <button role="tab" data-tab="analysis" aria-selected="false">人口分析</button>
+      <button role="tab" data-tab="radar" aria-selected="false">市场雷达</button>
     </nav>
     <div class="sub" id="sub">每个车站步行 800 米内的治安、成交价与生活设施</div>
     <div class="stamp" id="stamp">—</div>
@@ -1660,9 +1661,10 @@ function styleFor(buffer){
 // the back button walks between the two.
 const SUBS = {map:'每个车站步行 800 米内的治安、成交价与生活设施',
               trend:'32 个区 + City · 房价、租金与成交 1995–2026',
-              analysis:'人口构成与收入、职业、犯罪、房价的关联 · Census 2021'};
+              analysis:'人口构成与收入、职业、犯罪、房价的关联 · Census 2021',
+              radar:'领先指标、回测与情景：什么时候买，五年后往哪走'};
 // the two full-page views share one frame, pointed at whichever was asked for
-const FRAME = {trend:['data/trend.html', '伦敦房价租金地图'], analysis:['data/analysis.html', '人口分析']};
+const FRAME = {trend:['data/trend.html', '伦敦房价租金地图'], analysis:['data/analysis.html', '人口分析'], radar:['data/radar.html', '市场雷达']};
 function showTab(t){
   if (!(t in SUBS)) t = 'map';
   $('#app').classList.toggle('trend', t in FRAME);
