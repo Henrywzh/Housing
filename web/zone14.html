@@ -1429,6 +1429,8 @@ function select(s){
 }
 
 /* ---------- wiring ---------- */
+// The legend swatches are drawn at the map's own fill opacity, so the bar shows what the map shows.
+function rampOpacity(){ for (const i of $('#ramp').children) i.style.opacity = Math.max(state.op, 0.12); }
 function drawLegend(){
   const m = METRIC[metric];
   $('#legendTitle').textContent = m ? m.t : '只看底图';
@@ -1437,6 +1439,7 @@ function drawLegend(){
            $('#rampHi').textContent = ''; return; }
   const br = BREAKS[metric];
   $('#ramp').innerHTML = RAMP.map(c => `<i style="background:${c}"></i>`).join('');
+  rampOpacity();
   $('#rampLo').textContent = m.f(0);
   $('#rampHi').textContent = m.f(br[br.length-1]) + '+';
 }
@@ -1481,6 +1484,7 @@ function wire(){
     $('#timeV').textContent = state.tmax >= 75 ? '不限' : '≤ ' + state.tmax + ' 分钟';
     $('#crimeV').textContent = state.crime >= 200 ? '不限' : '≤ ' + state.crime;
     $('#opV').textContent = Math.round(state.op * 100) + '%';
+    rampOpacity();
     if (ready){
       MAP.setPaintProperty('lsoa-fill', 'fill-opacity', metric === 'none' ? 0 : state.op);
       for (const [id, on] of [['line-path', state.layers.line], ['line-casing', state.layers.line],
