@@ -275,6 +275,11 @@ label.chk input{accent-color:var(--signal)}
           <option value="ow">自有住房 %</option>
           <option value="pr">私人租赁 %</option>
         </optgroup>
+        <optgroup label="收入 · ONS 估算（MSOA 级）">
+          <option value="e_inc">家庭净收入，按家庭规模调整 · 税后、扣房租前</option>
+          <option value="e_ina">家庭净收入，按家庭规模调整 · 扣房租/按揭后</option>
+          <option value="e_int">家庭总收入 · 税前、未调整</option>
+        </optgroup>
         <optgroup label="人口构成 · 族裔 · Census 2021">
           <option value="e_wh">白人 White（合计）</option>
           <option value="e_wb">　英格兰/威尔士/苏格兰/北爱/英国白人</option>
@@ -584,6 +589,12 @@ const ETH_NAME = {wh:'白人', wb:'英国白人（英格兰/威尔士/苏格兰/
 for (const [k, nm] of Object.entries(ETH_NAME))
   METRIC['e_' + k] = {t:nm + ' %', f:v => (v < 10 ? v.toFixed(1) : v.toFixed(0)) + '%',
     n:'Census 2021 自报族裔，占该 LSOA 常住人口的比例。这是人口构成，不是收入、犯罪或好坏的度量；配色按这一族裔在伦敦各 LSOA 中的分位数。'};
+// Income: ONS small-area estimates (FYE 2023). Published per MSOA (about 7,000 people), so every LSOA
+// inside one shows the same colour. Modelled from surveys and Census, not measured.
+const INC_NOTE = '＊这不是真正的「人均」收入：ONS 只公布家庭收入。「按家庭规模调整」（equivalised）已经考虑了家里有几口人，是最接近人均的一个。数据是 2022/23 财年的模型估算，按 MSOA（约 7000 人）公布，所以同一个 MSOA 里的小区颜色相同。';
+METRIC.e_inc = {lt:true, t:'家庭净收入（调整后）£/年', f:v => '£' + Math.round(v / 1000) + 'k', n:'税后、扣房租/按揭之前，按家庭规模调整。' + INC_NOTE};
+METRIC.e_ina = {lt:true, t:'扣房租后净收入（调整后）£/年', f:v => '£' + Math.round(v / 1000) + 'k', n:'税后、扣掉房租或按揭之后，按家庭规模调整：更能反映手上能花的钱，租房多的地方会比上一项低。' + INC_NOTE};
+METRIC.e_int = {lt:true, t:'家庭总收入（税前）£/年', f:v => '£' + Math.round(v / 1000) + 'k', n:'整个家庭税前总收入，没有按人口调整：家里人多收入就高，所以不等于人均。' + INC_NOTE};
 // the rest of the Census make-up: birthplace and language, religion (all of residents), household types (of households)
 const MIX_NAME = {nb:['海外出生', '常住人口中出生在英国以外的比例。'], nl:['主要语言不是英语', '3 岁以上常住人口中，主要语言不是英语的比例。'],
   pe:['英语说不好或不会说', '3 岁以上常住人口中，主要语言不是英语且英语说不好或完全不会的比例。'],
@@ -1453,7 +1464,7 @@ function drawLegend(){
   const br = BREAKS[metric];
   $('#ramp').innerHTML = RAMP.map(c => `<i style="background:${c}"></i>`).join('');
   rampOpacity();
-  $('#rampLo').textContent = m.f(0);
+  $('#rampLo').textContent = m.lt ? '< ' + m.f(br[0]) : m.f(0);
   $('#rampHi').textContent = m.f(br[br.length-1]) + '+';
 }
 function wire(){

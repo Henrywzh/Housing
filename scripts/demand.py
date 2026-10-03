@@ -59,6 +59,21 @@ def ethnic_shares():
     return sh, e[0]
 
 
+def income_by_lsoa():
+    """ONS model-based household income (financial year ending 2023), published per MSOA, given to
+    each LSOA inside it. inc: net, equivalised (adjusted for household size, the nearest thing to
+    income per person), before housing costs; ina: the same after rent or mortgage;
+    int: total gross household income, not adjusted for household size."""
+    pc = pd.read_csv(RAW / "postcodes.csv", usecols=["lsoa", "msoa"]).drop_duplicates("lsoa").set_index("lsoa")
+    out = pd.DataFrame(index=pc.index)
+    for k, sheet in (("inc", "Net income before housing costs"), ("ina", "Net income after housing costs"),
+                     ("int", "Total annual income")):
+        d = pd.read_excel(RAW / "msoa_income_fye2023.xlsx", sheet_name=sheet, header=3)
+        v = pd.to_numeric(d.set_index(d.columns[0])[d.columns[6]], errors="coerce")
+        out[k] = pc["msoa"].map(v)
+    return out
+
+
 def lsoa_extra():
     """LSOA -> %: born outside the UK, religion (of residents), main language not English,
     poor English, and household types (of households). Keys are the short names the
