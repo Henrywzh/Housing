@@ -37,6 +37,10 @@ TABLES = [
     # who lives here and what they do, which is what a buyer or tenant pool is made of.
     # Industry (TS060) is only published down to MSOA: see fetch_census_msoa.py.
     ("NM_2080_1", "occ", "c2021_occ_10", "0,1,2,3"),
+    # TS021 ethnic group: the five broad groups (1001-1005) and the detailed ones
+    # worth separating (Indian, Pakistani, Bangladeshi, Chinese, other Asian;
+    # Caribbean, African, other Black; White British, Irish, other White; Arab, other).
+    ("NM_2041_1", "ethnic", "c2021_eth_20", "0,1001,1002,1003,1004,1005,10,11,12,13,14,15,16,17,1,2,5,18,19"),
 ]
 URL = ("https://www.nomisweb.co.uk/api/v01/dataset/{ds}.data.csv"
        "?geography={lad}TYPE151&{dim}={cells}&measures=20100"

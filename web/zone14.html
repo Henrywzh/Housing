@@ -265,6 +265,25 @@ label.chk input{accent-color:var(--signal)}
           <option value="ow">自有住房 %</option>
           <option value="pr">私人租赁 %</option>
         </optgroup>
+        <optgroup label="人口构成 · 族裔 · Census 2021">
+          <option value="e_wh">白人 White（合计）</option>
+          <option value="e_wb">　英格兰/威尔士/苏格兰/北爱/英国白人</option>
+          <option value="e_ir">　爱尔兰裔白人</option>
+          <option value="e_wo">　其他白人</option>
+          <option value="e_as">亚裔 Asian（合计）</option>
+          <option value="e_ch">　华裔 Chinese</option>
+          <option value="e_in">　印度裔 Indian</option>
+          <option value="e_pk">　巴基斯坦裔 Pakistani</option>
+          <option value="e_bd">　孟加拉裔 Bangladeshi</option>
+          <option value="e_oa">　其他亚裔</option>
+          <option value="e_bk">黑人 Black（合计）</option>
+          <option value="e_af">　非洲裔 African</option>
+          <option value="e_cb">　加勒比裔 Caribbean</option>
+          <option value="e_ob">　其他黑人</option>
+          <option value="e_mx">混血 Mixed</option>
+          <option value="e_ar">阿拉伯裔 Arab</option>
+          <option value="e_ot">其他族裔</option>
+        </optgroup>
         <optgroup label="市场">
           <option value="p">公寓中位价</option>
           <option value="nb">新房占比 %</option>
@@ -518,6 +537,14 @@ const METRIC = {
   t:  {t:'年成交量 / 千居民', f:v => v.toFixed(1),
        n:'流动性：一年有多少套公寓换手。低不代表贵，代表卖得慢。'},
 };
+// Census 2021 ethnic group (TS021): share of each LSOA's usual residents. Bands are the
+// seven quantiles of that group across London's LSOAs, so every group uses the whole ramp.
+const ETH_NAME = {wh:'白人', wb:'英国白人（英格兰/威尔士/苏格兰/北爱）', ir:'爱尔兰裔白人', wo:'其他白人',
+  as:'亚裔', ch:'华裔', in:'印度裔', pk:'巴基斯坦裔', bd:'孟加拉裔', oa:'其他亚裔',
+  bk:'黑人', af:'非洲裔', cb:'加勒比裔', ob:'其他黑人', mx:'混血', ar:'阿拉伯裔', ot:'其他族裔'};
+for (const [k, nm] of Object.entries(ETH_NAME))
+  METRIC['e_' + k] = {t:nm + ' %', f:v => (v < 10 ? v.toFixed(1) : v.toFixed(0)) + '%',
+    n:'Census 2021 自报族裔，占该 LSOA 常住人口的比例。这是人口构成，不是收入、犯罪或好坏的度量；配色按这一族裔在伦敦各 LSOA 中的分位数。'};
 
 const state = {zones:new Set([1,2,3,4,5,6]), pmin:100, pmax:600, tmax:75, beds:new Set(), minNr:5,
                unk:true, crime:200, prem:false, multi:false, op:0.30, railStn:false,
@@ -567,6 +594,18 @@ const demScore = o => { if (!o.dm) return null;
 // Over 12% means the price is a part-share or a data slip, not a flat: left blank rather than shown.
 const yieldOf = (o, price) => { const y = (o.dm && o.dm.rent && price) ? 12 * o.dm.rent / price * 100 : null;
   return y != null && y <= 12 ? y : null; };
+// Ethnic mix within 1 km: five broad groups as a bar, the detailed ones as rows.
+const ETH_BROAD = [['wh','白人','#8a9ba8'], ['as','亚裔','#c98a3a'], ['bk','黑人','#4a7c59'], ['mx','混血','#8a5aa8'], ['ox','其他','#b0624a']];
+const ethKv = o => { const e = o.dm && o.dm.eth; if (!e) return '';
+  const v = {...e, ox: Math.round((e.ar + e.ot) * 10) / 10};
+  const row = (k, name) => `<dt>${name}</dt><dd>${e[k]}%</dd>`;
+  return `<div class="ethbar" style="display:flex;height:10px;border-radius:3px;overflow:hidden;margin:2px 0 6px">${ETH_BROAD.map(([k,, c]) => `<i style="width:${v[k]}%;background:${c}" title="${v[k]}%"></i>`).join('')}</div>
+  <dl class="kv">
+  ${ETH_BROAD.map(([k, n, c]) => `<dt><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c};margin-right:5px"></i>${n}</dt><dd>${v[k]}%</dd>`).join('')}
+  <dt class="na">　华裔 / 印度 / 巴基斯坦 / 孟加拉</dt><dd class="na">${e.ch} / ${e.in} / ${e.pk} / ${e.bd}%</dd>
+  <dt class="na">　非洲 / 加勒比</dt><dd class="na">${e.af} / ${e.cb}%</dd>
+  <dt class="na">　英国白人 / 其他白人</dt><dd class="na">${e.wb} / ${e.wo}%</dd></dl>
+  <p class="caveat" style="margin-top:2px">1 公里内常住人口，Census 2021 自报族裔。仅作人口构成参考，不进评分。地图左栏「着色」里可单独看每个族裔。</p>`; };
 const demKv = (o, price) => { const d = o.dm; if (!d) return '';
   const m = k => DEM_MED[k] != null ? `<span class="na"> · 中位 ${DEM_MED[k] % 1 ? DEM_MED[k].toFixed(1) : DEM_MED[k]}</span>` : '';
   const y = yieldOf(o, price);
@@ -1187,6 +1226,7 @@ function selectScheme(x){
     ${nuText(x).length ? `<p class="caveat">${nuText(x).map(t => '⚠ 附近有 ' + t).join('；')}。每个扣综合分 10 分（上限 30）。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(x.gp, x.cw, x.ls)}
     <div class="sect">附近需求 · 谁会租、谁会买</div>${demKv(x, x.price)}
+    <div class="sect">人口构成 · 族裔</div>${ethKv(x)}
     <div class="sect">附近供给 · 1 公里</div>${supKv(x)}
     <div class="sect">成交 · Land Registry</div>
     <dl class="kv">
@@ -1243,6 +1283,7 @@ function select(s){
     ${nuText(s).length ? `<p class="caveat">${nuText(s).map(t => '⚠ 车站附近有 ' + t).join('；')}。</p>` : ''}
     <div class="sect">到达 · 工作日 8:40</div>${commuteKv(s.gp ? s.gp.min : null, s.cw ?? null, s.ls ?? null)}
     <div class="sect">附近需求 · 谁会租、谁会买</div>${demKv(s, s.price)}
+    <div class="sect">人口构成 · 族裔</div>${ethKv(s)}
     <div class="sect">附近供给 · 1 公里</div>${supKv(s)}
     ${s.gp ? `<div class="sect">通勤 · 8:40 到 Green Park</div>
     <dl class="kv"><dt>门到门</dt><dd><b>${s.gp.min} 分钟</b> · ${s.gp.changes ? s.gp.changes + ' 次换乘' : '直达'}</dd>

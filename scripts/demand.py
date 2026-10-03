@@ -41,6 +41,18 @@ def pivot(name, dim):
     return d.pivot_table(index="GEOGRAPHY_CODE", columns=dim.upper(), values="OBS_VALUE", aggfunc="sum")
 
 
+# Census 2021 ethnic group (TS021): short key -> code. Shares are of all residents.
+ETH = {"as": 1001, "ch": 13, "in": 10, "pk": 11, "bd": 12, "oa": 14,
+       "bk": 1002, "af": 16, "cb": 15, "ob": 17,
+       "mx": 1003, "wh": 1004, "wb": 1, "ir": 2, "wo": 5, "ar": 18, "ot": 19}
+
+
+def ethnic_shares():
+    """LSOA -> % of residents in each ethnic group (rows are the ETH keys)."""
+    e = pivot("lsoa_ethnic", "c2021_eth_20")
+    return pd.DataFrame({k: 100 * e[c] / e[0] for k, c in ETH.items()}), e[0]
+
+
 class Demand:
     def __init__(self):
         pc = pd.read_csv(RAW / "postcodes.csv", usecols=["postcode", "lat", "lon", "lsoa", "msoa"])
@@ -52,6 +64,9 @@ class Demand:
             "deg_n": qual[6], "deg_d": qual[0],
             "yg_n": age[6] + age[7] + age[8], "yg_d": age[0],
             "rn_n": ten[1004], "rn_d": ten[0]}).join(cl, how="inner").dropna()
+        sh, pop = ethnic_shares()
+        self.eth = sh.join(pop.rename("pop"), how="inner").join(cl, how="inner").dropna()
+        self.et = cKDTree(xy(self.eth.lat, self.eth.lon))
         self.l = t
         self.lt = cKDTree(xy(t.lat, t.lon))
         ind = pd.read_csv(RAW / "msoa_industry.csv").pivot_table(
@@ -98,6 +113,12 @@ class Demand:
                 out["dg"] = round(float(100 * s.deg_n / s.deg_d), 1)
                 out["yg"] = round(float(100 * s.yg_n / s.yg_d), 1)
                 out["rn"] = round(float(100 * s.rn_n / s.rn_d), 1)
+        ex = self.et.query_ball_point(p, 1000)
+        if ex:
+            e = self.eth.iloc[ex]
+            if e["pop"].sum() >= 500:
+                w = e["pop"] / e["pop"].sum()
+                out["eth"] = {k: round(float((e[k] * w).sum()), 1) for k in ETH}
         jx = self.mt.query_ball_point(p, 1500)
         if jx:
             s = self.m.iloc[jx][["d", "fi", "tc"]].sum()
