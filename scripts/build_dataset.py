@@ -33,7 +33,7 @@ hpi_cols = [
     "SalesVolume", "FlatPrice", "Flat12m%Change", "TerracedPrice",
     "SemiDetachedPrice", "DetachedPrice", "NewPrice", "OldPrice",
     "FTBPrice", "FTB12m%Change", "New12m%Change", "NewSalesVolume",
-    "Old12m%Change", "OldSalesVolume",
+    "Old12m%Change", "OldSalesVolume", "CashSalesVolume", "MortgageSalesVolume",
 ]
 hpi = pd.read_csv(HPI_FILE, usecols=lambda c: c in hpi_cols, low_memory=False)
 hpi["Date"] = pd.to_datetime(hpi["Date"], dayfirst=True, format="mixed")
@@ -47,6 +47,7 @@ hpi = hpi.rename(columns={
     "FTBPrice": "ftb_price", "FTB12m%Change": "ftb_yoy",
     "New12m%Change": "new_yoy", "NewSalesVolume": "new_sales",
     "Old12m%Change": "old_yoy", "OldSalesVolume": "old_sales",
+    "CashSalesVolume": "cash_sales", "MortgageSalesVolume": "mort_sales",
 })
 hpi["ym"] = hpi["date"].dt.strftime("%Y-%m")
 
@@ -88,6 +89,28 @@ base = panel[panel["ym"] == "2015-01"].set_index("code")
 panel["rent_vs_price"] = panel.apply(
     lambda r: (r["rent"] / r["price"]) / (base["rent"].get(r["code"], np.nan) / base["price"].get(r["code"], np.nan)) * 100
     if r["code"] in base.index else np.nan, axis=1)
+
+# ---- how active the market is -------------------------------------------------
+# Monthly sales counts jump about with the season, so activity is read on twelve-month sums.
+# A sum exists only where all twelve months do. The newest months are provisional: a sale shows up
+# in the register some weeks after it completes, so the last few counts are low and get revised up.
+panel = panel.sort_values(["code", "ym"])
+g = panel.groupby("code")
+panel["sales12"] = g["sales"].transform(lambda s: s.rolling(12, min_periods=12).sum())
+base = panel[panel["ym"].between("2015-01", "2019-12")].groupby("code")["sales12"].mean()
+panel["sales_idx"] = panel["sales12"] / panel["code"].map(base) * 100           # 2015-19 average = 100
+panel["sales_yoy"] = (panel["sales12"] / panel.groupby("code")["sales12"].shift(12) - 1) * 100
+# turnover: homes sold a year per 1000 homes. Households (Census 2021) stand in for homes.
+_hh = pd.read_csv(RAW / "lsoa_households.csv")
+_hh = _hh[_hh["C2021_HH_1"].astype(str) == "0"].rename(columns={"GEOGRAPHY_CODE": "lsoa", "OBS_VALUE": "hh"})
+_pc = pd.read_csv(RAW / "postcodes.csv", usecols=["lsoa", "lad"]).drop_duplicates("lsoa")
+_hh = _hh.merge(_pc, on="lsoa").groupby("lad")["hh"].sum()
+_hh["E12000007"] = _hh[_hh.index.astype(str).str.startswith("E09")].sum()
+panel["turnover"] = panel["sales12"] / panel["code"].map(_hh) * 1000
+# the share of sales that were cash, among those whose finance is known
+_c = g["cash_sales"].transform(lambda s: s.rolling(12, min_periods=12).sum())
+_m = g["mort_sales"].transform(lambda s: s.rolling(12, min_periods=12).sum())
+panel["cash_share"] = _c / (_c + _m) * 100
 
 # ---- flat x new/existing, from Price Paid transactions (quarterly, held flat
 #      across the months of each quarter so it shares the monthly timeline) ----
@@ -138,7 +161,7 @@ METRICS = ["price", "price_yoy", "flat_price", "flat_yoy", "sales",
            "new_price", "new_yoy", "old_price", "old_yoy", "new_premium", "new_share",
            "rent", "rent_yoy", "rent1", "rent1_yoy", "rent_flat", "rent_flat_yoy",
            "yield_gross", "yield_flat", "yield_1bed_flat", "rent_vs_price",
-           "price_index", "rent_index",
+           "price_index", "rent_index", "sales12", "sales_idx", "sales_yoy", "turnover", "cash_share",
            "pf_new", "pf_old", "pf_prem", "pf_newshare", "pf_n"]
 
 months = [m for m in sorted(panel["ym"].dropna().unique()) if m >= "1995-01"]
@@ -151,7 +174,7 @@ for code, g in panel.groupby("code"):
             continue
         s = g[m]
         dec = 0 if m in ("price", "flat_price", "rent", "rent1", "rent2", "rent_flat",
-                         "sales", "new_price", "old_price", "pf_new", "pf_old", "pf_n") else 2
+                         "sales", "sales12", "new_price", "old_price", "pf_new", "pf_old", "pf_n") else 1 if m in ("sales_idx", "sales_yoy", "turnover", "cash_share") else 2
         rec[m] = [None if pd.isna(v) else round(float(v), dec) for v in s]
     areas[code] = rec
 

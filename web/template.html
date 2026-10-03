@@ -323,6 +323,13 @@ footer code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:va
     <div class="charts" id="charts"></div>
   </section>
 
+  <section class="card detail" id="heatSection">
+    <div class="dhead"><h2>市场冷热榜 · 价格和成交量一起看</h2>
+      <span class="code" id="heatMonth">—</span></div>
+    <p class="subnote" id="heatNote"></p>
+    <div class="tablewrap"><table class="soctbl" id="heatTable" style="min-width:860px"></table></div>
+  </section>
+
   <section class="card detail" id="subSection">
     <div class="dhead"><h2>十个新开发区 · 公寓逐笔成交</h2>
       <span class="code">Price Paid Data · 按 postcode sector 聚合</span></div>
@@ -468,6 +475,12 @@ const METRICS = [
   {k:'flat_price', g:'房价', n:'公寓均价',            type:'seq', fmt:money,  fmtShort:moneyK, unit:''},
   {k:'flat_yoy',   g:'房价', n:'公寓同比',            type:'div', fmt:pct,    fmtShort:pct,    unit:''},
   {k:'sales',      g:'房价', n:'月度成交量',          type:'seq', fmt:cnt,    fmtShort:cnt,    unit:'套'},
+  {k:'sales12',    g:'市场活跃度', n:'12 个月成交量',       type:'seq', fmt:cnt,    fmtShort:cnt,    unit:'套', prov:1},
+  {k:'sales_idx',  g:'市场活跃度', n:'活跃度指数 · 2015–19 年均 = 100', type:'div', fmt:v=>v.toFixed(0), fmtShort:v=>v.toFixed(0), unit:'',
+   breaks:[60,80,95,105,120,140], prov:1},
+  {k:'sales_yoy',  g:'市场活跃度', n:'成交量同比 · 12 个月滚动', type:'div', fmt:pct,    fmtShort:pct,    unit:'', prov:1},
+  {k:'turnover',   g:'市场活跃度', n:'换手率 · 每千户一年成交', type:'seq', fmt:num1,   fmtShort:num0,   unit:'套', prov:1},
+  {k:'cash_share', g:'市场活跃度', n:'现金购房占比 · 12 个月',  type:'seq', fmt:num1p,  fmtShort:num0p,  unit:'', prov:1},
   {k:'new_price',  g:'新房 vs 二手', n:'新房均价 (HPI)',  type:'seq', fmt:money, fmtShort:moneyK, unit:''},
   {k:'new_yoy',    g:'新房 vs 二手', n:'新房同比',        type:'div', fmt:pct,   fmtShort:pct,    unit:''},
   {k:'old_price',  g:'新房 vs 二手', n:'二手均价 (HPI)',  type:'seq', fmt:money, fmtShort:moneyK, unit:''},
@@ -545,6 +558,12 @@ function lastGoodIdx(key, minAreas){
   }
   return lastIdxWith(key);
 }
+// A sale reaches the register some weeks after it completes, so the newest months of every
+// sales count are low and get revised up. Anything built from them is marked provisional, and the
+// slider lands on the last month before that window.
+let PROV_AFTER = -1;
+const isProv = (m, i) => !!m.prov && PROV_AFTER >= 0 && i > PROV_AFTER;
+function defaultIdx(m){ const g = lastGoodIdx(m.k); return m.prov && PROV_AFTER >= 0 ? Math.min(g, PROV_AFTER) : g; }
 function firstIdxWith(key){ if(STATIC.has(key)) return 0;
   for(let i = 0; i < MONTHS.length; i++){
     if(BOROUGHS.some(c => val(c, key, i) !== null)) return i; } return 0; }
@@ -664,7 +683,9 @@ function renderMap(){
     : m.k.startsWith('pf_') ? '逐笔成交中位数 · 季度 · 单季样本<10 不出数' : '';
   document.getElementById('slider').disabled = !!m.static;
   document.getElementById('play').disabled = !!m.static;
-  document.getElementById('mapNote').textContent = ppdNote || (
+  document.getElementById('mapNote').textContent = isProv(m, i)
+    ? '⚠ ' + ymLabel(MONTHS[i]) + ' 的成交登记还没齐（最近 6 个月会被低估，之后会上修），这个数偏低，别当作真实的下降'
+    : ppdNote || (
     st.scale === 'global' && m.type === 'seq' ? '色阶固定于 1995–2026 全历史范围' :
     m.type === 'div' ? '发散色阶，灰 = 持平' : '色阶按当月最小/最大拉伸');
   renderLegend(m, breaks);
@@ -737,6 +758,7 @@ function renderDetail(){
   const i = st.mi;
   const pi = val(code,'price',i) !== null ? i : lastIdxWith('price');
   const ri = val(code,'rent',i) !== null ? i : lastIdxWith('rent');
+  const ai = Math.min(i, PROV_AFTER);   // activity is read at the last complete month at the latest
   const p95 = val(code,'price',0), pNow = val(code,'price',pi);
   const r15 = val(code,'rent', firstIdxWith('rent')), rNow = val(code,'rent',ri);
   const cells = [
@@ -749,6 +771,10 @@ function renderDetail(){
       + (backIdx(code,'pf_prem',pi) < 0 ? '' : ' · 较二手 ' + pct(val(code,'pf_prem',backIdx(code,'pf_prem',pi))))],
     ['二手公寓中位价', money2(code, 'pf_old', pi), qNote(code, 'pf_old', pi)
       + (backIdx(code,'pf_newshare',pi) < 0 ? '' : ' · 新房占成交 ' + pctInt(val(code,'pf_newshare',backIdx(code,'pf_newshare',pi))))],
+    ['12 个月成交 ' + MONTHS[ai], val(code,'sales12',ai) === null ? '—' : cnt(val(code,'sales12',ai)) + ' 套',
+      '活跃度 ' + (val(code,'sales_idx',ai) === null ? '—' : val(code,'sales_idx',ai).toFixed(0)) + ' · ' + sign(val(code,'sales_yoy',ai)) + ' 同比'],
+    ['换手率', val(code,'turnover',ai) === null ? '—' : num1(val(code,'turnover',ai)) + '‰/年',
+      '现金购房占 ' + (val(code,'cash_share',ai) === null ? '—' : num0p(val(code,'cash_share',ai)))],
     ['1995 以来涨幅', (p95 && pNow) ? '×' + (pNow/p95).toFixed(1) : '—', p95 ? '起点 ' + money(p95) : ''],
     ['2015 以来租金', (r15 && rNow) ? '+' + ((rNow/r15 - 1)*100).toFixed(0) + '%' : '—', r15 ? '起点 ' + money(r15) + '/月' : '']
   ];
@@ -795,6 +821,14 @@ function renderDetail(){
       series(code, 'pf_prem', '公寓 · 新建 vs 二手', 'var(--s2)'),
       series(code, 'new_premium', '全房型 · HPI 口径', 'var(--ink-3)', true)
     ], pct, true, 'pct');
+  chart(C, '成交活跃度指数 · 12 个月滚动成交量（2015–19 年均 = 100）· 最近 6 个月为临时数', [
+      series(code, 'sales_idx', a.name, 'var(--s1)'),
+      cmp ? series(cmp, 'sales_idx', '全伦敦', 'var(--ink-3)', true) : null
+    ], v => v.toFixed(0), false, 'pct0');
+  chart(C, '现金购房占比（12 个月，已知融资方式的成交中）', [
+      series(code, 'cash_share', a.name, 'var(--s2)'),
+      cmp ? series(cmp, 'cash_share', '全伦敦', 'var(--ink-3)', true) : null
+    ], num1p, false, 'pct0');
   chart(C, '公寓毛收益率', [
       series(code, 'yield_flat', a.name, 'var(--s3)'),
       cmp ? series(cmp, 'yield_flat', '全伦敦', 'var(--ink-3)', true) : null
@@ -1054,7 +1088,7 @@ sel.addEventListener('change', () => {
   const m = MBY[st.metric], f = firstIdxWith(m.k), l = lastIdxWith(m.k);
   const s = document.getElementById('slider');
   s.min = f; s.max = l;
-  if(st.mi < f || st.mi > l) st.mi = lastGoodIdx(m.k);
+  if(st.mi < f || st.mi > l || (m.prov && st.mi > PROV_AFTER)) st.mi = defaultIdx(m);
   s.value = st.mi;
   if(m.static && st.scale === 'global') setScale('quantile');
   else if(!m.static && st.scale === 'quantile') setScale('global');
@@ -1101,6 +1135,7 @@ document.getElementById('theme').addEventListener('click', () => {
 function renderAll(){
   document.getElementById('dateLab').textContent = MONTHS[st.mi];
   renderMap(); renderRank(); renderStrip(); renderDetail();
+  if(typeof renderHeat === 'function' && PROV_AFTER >= 0) renderHeat();
 }
 /* ---------------- submarket layer ---------------- */
 const SM = DATA.submarkets || {}, LF = DATA.london_flat || {};
@@ -1259,6 +1294,55 @@ function renderSoc(){
     + '所以这里用的是 MSOA 家庭收入模型估计。';
 }
 renderSoc();
+
+/* ---------------- the heat table: price and activity together ---------------- */
+PROV_AFTER = lastIdxWith('sales') - 6;
+let heatSort = {k:'sales_idx', dir:-1};
+function heatState(p, v){
+  if(p === null || v === null) return '—';
+  const pu = p >= 1, pd = p <= -1, vu = v >= 5, vd = v <= -5;
+  if(!pu && !pd && !vu && !vd) return '平稳';
+  if(pu && vu) return '升温 · 价涨量增';
+  if(pu && vd) return '惜售 · 价涨量缩';
+  if(pd && vu) return '让利 · 价跌量增';
+  if(pd && vd) return '降温 · 价跌量缩';
+  return pu ? '价涨 · 量平' : pd ? '价跌 · 量平' : vu ? '量增 · 价平' : '量缩 · 价平';
+}
+const HEAT_CLS = s => s.startsWith('升温') ? 'up' : s.startsWith('降温') ? 'dn' : '';
+function renderHeat(){
+  const i = Math.min(st.mi, PROV_AFTER);
+  const codes = [LDN, ...BOROUGHS];
+  const rows = codes.map(c => ({c, name: AREAS[c].name,
+    n: val(c,'sales12',i), idx: val(c,'sales_idx',i), yoy: val(c,'sales_yoy',i), to: val(c,'turnover',i),
+    cash: val(c,'cash_share',i), py: val(c,'price_yoy',i)}));
+  const key = {name:'name', n:'n', sales_idx:'idx', sales_yoy:'yoy', turnover:'to', cash_share:'cash', price_yoy:'py'}[heatSort.k];
+  const body = rows.filter(r => r.c !== LDN).sort((a,b) => {
+    const x = a[key], y = b[key];
+    if(x === null && y === null) return 0; if(x === null) return 1; if(y === null) return -1;
+    return typeof x === 'string' ? x.localeCompare(y) * heatSort.dir : (x - y) * heatSort.dir; });
+  const lon = rows.find(r => r.c === LDN);
+  const cols = [['name','区'],['n','12 个月成交'],['sales_idx','活跃度指数'],['sales_yoy','成交同比'],['turnover','换手率 ‰'],
+                ['cash_share','现金占比'],['price_yoy','房价同比'],['','状态']];
+  const f = (v, g) => v === null ? '—' : g(v);
+  const tr = r => '<tr' + (r.c === LDN ? ' style="font-weight:600"' : '') + '><td>' + r.name + '</td>'
+    + '<td class="n">' + f(r.n, cnt) + '</td><td class="n">' + f(r.idx, v => v.toFixed(0)) + '</td>'
+    + '<td class="n">' + (r.yoy === null ? '—' : sign(r.yoy)) + '</td><td class="n">' + f(r.to, num1) + '</td>'
+    + '<td class="n">' + f(r.cash, num0p) + '</td><td class="n">' + (r.py === null ? '—' : sign(r.py)) + '</td>'
+    + '<td class="' + HEAT_CLS(heatState(r.py, r.yoy)) + '">' + heatState(r.py, r.yoy) + '</td></tr>';
+  document.getElementById('heatTable').innerHTML =
+    '<thead><tr>' + cols.map(([k, h]) => '<th' + (k ? ' data-k="' + k + '" style="cursor:pointer"' : '') + '>' + h
+      + (heatSort.k === k ? (heatSort.dir < 0 ? ' ▼' : ' ▲') : '') + '</th>').join('') + '</tr></thead><tbody>'
+    + tr(lon) + body.map(tr).join('') + '</tbody>';
+  document.getElementById('heatMonth').textContent = ymLabel(MONTHS[i]) + ' · 12 个月滚动';
+  for(const th of document.querySelectorAll('#heatTable th[data-k]'))
+    th.onclick = () => { heatSort = {k: th.dataset.k, dir: heatSort.k === th.dataset.k ? -heatSort.dir : (th.dataset.k === 'name' ? 1 : -1)}; renderHeat(); };
+  document.getElementById('heatNote').innerHTML =
+    '<b>活跃度指数</b> = 过去 12 个月成交量 ÷ 2015–19 年同期平均（来自 HM Land Registry 的 UK HPI 成交计数）。<b>换手率</b> = 一年成交套数 ÷ 每千户（以 Census 2021 住户数代替住房数）。'
+    + '<b>现金占比</b>只算已知融资方式的成交。<b>状态</b>：房价同比 ±1% 与成交同比 ±5% 为界——升温（价涨量增）、惜售（价涨量缩）、让利（价跌量增）、降温（价跌量缩）。'
+    + '这是登记价格和数量的快照，<b>没有挂牌量和成交周期数据</b>（Land Registry 不记录），所以看不出卖得快不快、有多少房在挂。'
+    + '拖动上面的时间轴可以换月份；为避免被未登记齐的最近 6 个月误导，这里最晚只取 ' + ymLabel(MONTHS[PROV_AFTER]) + '。';
+}
+renderHeat();
 
 /* ---------------- yield calculator + real price distribution ---------------- */
 function calcYield(){
@@ -1482,7 +1566,7 @@ document.getElementById('vintage').textContent =
   '房价至 ' + DATA.meta.hpi_vintage.split(' ')[0] + ' · 租金至 ' + DATA.meta.pipr_vintage.split(' ')[0];
 (function initSlider(){
   const m = MBY[st.metric], f = firstIdxWith(m.k), l = lastIdxWith(m.k);
-  slider.min = f; slider.max = l; st.mi = lastGoodIdx(m.k); slider.value = st.mi;
+  slider.min = f; slider.max = l; st.mi = defaultIdx(m); slider.value = st.mi;
   document.querySelectorAll('#scaleSeg button').forEach(b => b.disabled = (m.type === 'div'));
 })();
 renderAll();
