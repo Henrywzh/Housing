@@ -79,6 +79,8 @@ th:first-child,td:first-child{text-align:left}
 th{font-weight:600;color:var(--muted);font-size:11.5px}
 td.c{cursor:pointer;font-family:"IBM Plex Mono",monospace;font-size:12px}
 td.c:hover{outline:2px solid var(--signal);outline-offset:-2px}
+tr.go-b{cursor:pointer}
+tr.go-b:hover td{background:var(--panel-2);color:var(--signal)}
 td.sel{outline:2px solid var(--ink);outline-offset:-2px}
 .scroll{overflow-x:auto}
 .go{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
@@ -120,7 +122,7 @@ td.sel{outline:2px solid var(--ink);outline-offset:-2px}
 
 <div class="card">
 <h2>香港出生、说广东话的居民 · 按区</h2>
-<p class="sub">Census 2021。出生地和具体语言（广东话、普通话）只公布到区一级，所以这里不能细到小区。说广东话 = 主要语言是粤语，不一定是香港人。同时列出大陆、新加坡、马来西亚出生，作对照。</p>
+<p class="sub">Census 2021。出生地和具体语言（广东话、普通话）只公布到区一级，所以这里不能细到小区。说广东话 = 主要语言是粤语，不一定是香港人。同时列出大陆、新加坡、马来西亚出生，作对照。<b>点任意一行，地图会跳到那个区。</b></p>
 <div class="scroll"><table id="bor"></table></div>
 </div>
 
@@ -197,7 +199,8 @@ function build(){
   $('n').textContent = D.n.toLocaleString();
   const bors = D.bor.slice().sort((a, b) => b.hk - a.hk);
   $('bor').innerHTML = `<tr><th>区</th><th>香港出生</th><th>占居民</th><th>说广东话</th><th>说普通话</th><th>中国大陆出生</th><th>新加坡出生</th><th>马来西亚出生</th></tr>` +
-    bors.map(b => `<tr><td>${b.n}</td><td>${b.hk.toLocaleString()}</td><td>${(100*b.hk/b.t).toFixed(2)}%</td><td>${b.cant.toLocaleString()}</td><td>${b.mand.toLocaleString()}</td><td>${b.cn.toLocaleString()}</td><td>${b.sg.toLocaleString()}</td><td>${b.my.toLocaleString()}</td></tr>`).join('');
+    bors.map(b => `<tr class="go-b" data-b="${b.n}" title="在地图上看 ${b.n}"><td>${b.n} →</td><td>${b.hk.toLocaleString()}</td><td>${(100*b.hk/b.t).toFixed(2)}%</td><td>${b.cant.toLocaleString()}</td><td>${b.mand.toLocaleString()}</td><td>${b.cn.toLocaleString()}</td><td>${b.sg.toLocaleString()}</td><td>${b.my.toLocaleString()}</td></tr>`).join('');
+  for (const tr of $('bor').querySelectorAll('tr.go-b')) tr.onclick = () => parent !== window && parent.postMessage({zone14Borough: tr.dataset.b}, '*');
   for (const id of ['x','y','adj']) $(id).addEventListener('input', draw);
   if (parent === window) $('go').hidden = true;      // opened on its own: no map to go back to
   $('gox').onclick = () => toMap('e_' + $('x').value);
