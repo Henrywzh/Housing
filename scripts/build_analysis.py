@@ -81,6 +81,10 @@ td.c{cursor:pointer;font-family:"IBM Plex Mono",monospace;font-size:12px}
 td.c:hover{outline:2px solid var(--signal);outline-offset:-2px}
 td.sel{outline:2px solid var(--ink);outline-offset:-2px}
 .scroll{overflow-x:auto}
+.go{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.go button{font:500 13px/1 Archivo,sans-serif;padding:8px 12px;border:1px solid var(--rule);border-radius:7px;background:var(--panel-2);color:var(--ink);cursor:pointer}
+.go button:hover:not(:disabled){border-color:var(--signal);color:var(--signal)}
+.go button:disabled{opacity:.45;cursor:default}
 .warn{border-left:3px solid var(--signal);padding:2px 0 2px 10px;margin:8px 0;color:var(--ink-2);font-size:13px}
 </style></head><body><div class="wrap">
 
@@ -103,6 +107,7 @@ td.sel{outline:2px solid var(--ink);outline-offset:-2px}
   <div class="stat"><span>占比最低的 1/5 小区</span><b id="lo">—</b></div>
   <div class="stat"><span>用到的小区数</span><b id="cnt">—</b></div>
   <p class="note" id="read"></p>
+  <div class="go" id="go"><button id="gox" type="button"></button><button id="goy" type="button"></button></div>
  </div>
 </div>
 </div>
@@ -169,6 +174,9 @@ function pick(keys){
   const idx = []; for (let i = 0; i < D.n; i++) if (keys.every(k => col(k)[i] != null)) idx.push(i);
   return {idx, get: k => idx.map(i => col(k)[i])};
 }
+// The map's colouring has the make-up variables and four of the outcomes; income and jobs are not on it.
+const MAPY = {dg:'dg', p:'p', br:'br', vi:'vi'};
+const toMap = metric => parent.postMessage({zone14Metric: metric}, '*');
 const cache = {};
 function pair(xk, yk){
   const key = xk + '|' + yk; if (cache[key]) return cache[key];
@@ -191,6 +199,9 @@ function build(){
   $('bor').innerHTML = `<tr><th>区</th><th>香港出生</th><th>占居民</th><th>说广东话</th><th>说普通话</th><th>中国大陆出生</th><th>新加坡出生</th><th>马来西亚出生</th></tr>` +
     bors.map(b => `<tr><td>${b.n}</td><td>${b.hk.toLocaleString()}</td><td>${(100*b.hk/b.t).toFixed(2)}%</td><td>${b.cant.toLocaleString()}</td><td>${b.mand.toLocaleString()}</td><td>${b.cn.toLocaleString()}</td><td>${b.sg.toLocaleString()}</td><td>${b.my.toLocaleString()}</td></tr>`).join('');
   for (const id of ['x','y','adj']) $(id).addEventListener('input', draw);
+  if (parent === window) $('go').hidden = true;      // opened on its own: no map to go back to
+  $('gox').onclick = () => toMap('e_' + $('x').value);
+  $('goy').onclick = () => MAPY[$('y').value] && toMap(MAPY[$('y').value]);
   addEventListener('resize', draw);
 }
 function heat(){
@@ -245,6 +256,8 @@ function draw(){
     (Math.abs(p.raw) - Math.abs(p.adj) > .12 ? ' 控制之后明显变弱，说明原来的关联大多来自这些因素。' : '');
   $('axnote').textContent = adj ? `横轴、纵轴都是扣掉控制变量后的残差（0 = 该因素下的预期值）。每个点是一个小区，点大 = 人口多，红线 = 加权拟合。`
     : `横轴 = ${NAMES[xk]}占小区居民的比例，纵轴 = ${OUT[yk][0]}。每个点是一个小区，点大 = 人口多，红线 = 加权拟合。`;
+  $('gox').textContent = `在地图上看「${NAMES[xk]}」的分布 →`;
+  const my = MAPY[yk]; $('goy').disabled = !my; $('goy').textContent = my ? `在地图上看「${OUT[yk][0]}」→` : `「${OUT[yk][0]}」没有地图图层`;
   scatter(p, adj); heat();
 }
 fetch('analysis.json').then(r => r.json()).then(d => { D = d; build(); draw(); });

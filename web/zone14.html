@@ -1661,6 +1661,19 @@ for (const b of document.querySelectorAll('#tabs button'))
     showTab(b.dataset.tab);
   });
 addEventListener('popstate', () => showTab(location.hash.slice(1)));
+// The analysis page asks to see one of its variables on the map: only from our own frame,
+// and only a colouring the map actually has.
+addEventListener('message', e => {
+  const f = $('#trend iframe');
+  if (!f || e.source !== f.contentWindow) return;
+  const m = e.data && e.data.zone14Metric;
+  if (typeof m !== 'string' || !(m in METRIC)) return;
+  history.pushState(null, '', location.pathname + location.search);
+  showTab('map');
+  const sel = $('#metric');
+  sel.value = m;
+  if (sel.value === m && typeof sel.onchange === 'function') sel.dispatchEvent(new Event('change'));
+});
 showTab(location.hash.slice(1));
 
 /* ---------- boot ---------- */
