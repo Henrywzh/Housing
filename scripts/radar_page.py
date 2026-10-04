@@ -70,7 +70,7 @@ th{font-weight:600;color:var(--muted);font-size:11.5px}
 <div class="cols">
  <div>
   <canvas id="range" height="190"></canvas>
-  <div class="kv"><span>模型预测中位</span><b id="f_pt">—</b></div>
+  <div class="kv"><span>模型预测中位（已用回测误差的中位数校正）</span><b id="f_pt">—</b></div>
   <div class="kv"><span>80% 区间（回测里的真实误差）</span><b id="f_rg">—</b></div>
   <div class="kv"><span>模型认为下跌的概率</span><b id="f_pf">—</b></div>
   <div class="kv"><span>历史相似月份之后的实际结果（中位）</span><b id="f_an">—</b></div>
@@ -87,6 +87,20 @@ th{font-weight:600;color:var(--muted);font-size:11.5px}
 <div class="scroll"><table id="bt"></table></div>
 <canvas id="rec" height="210" style="margin-top:10px"></canvas>
 <p class="note" id="btn"></p>
+</div>
+
+<div class="card" id="exp">
+<h2>2b · 两个改进实验：调参，以及「房价相对收入是否太贵」</h2>
+<p class="sub">规则在看结果之前就定好了（见下），所有模型在<b>完全相同的月份</b>上比较。结果是真实的，包括没有改善的。</p>
+<h3 style="margin-top:4px">① 岭回归的惩罚强度（λ）</h3>
+<p class="sub">之前固定用 30，是拍脑袋定的。λ 越大，模型越保守，越接近「只看平均水平」。<b>规则：</b>每个预测月只用当时的训练数据，向前滚动选 λ（嵌套交叉验证）；只要不比固定 30 更差就采用。</p>
+<div class="scroll"><table id="exp_pen"></table></div>
+<p class="note" id="exp_pen_n"></p>
+<h3>② 估值项：房价/收入、月供/收入</h3>
+<p class="sub">两个估值项都用「相对自己迄今平均值的偏离」（只用当时已有的数据算均值）：房价÷全国平均周薪，以及按当时 2 年固定利率算的月供÷全国平均周薪。<b>规则：</b>总误差更低，<b>并且</b>三个子时期中至少两个更低，<b>并且</b>在「同去年」错得最离谱（≥ 8 个百分点）的转折月里不更差，才加入预测。</p>
+<div class="scroll"><table id="exp_val"></table></div>
+<p class="note" id="exp_val_n"></p>
+<div class="grid" id="exp_now" style="margin-top:10px"></div>
 </div>
 
 <div class="card">
@@ -307,7 +321,36 @@ function sources(){
   $('oneline').innerHTML = `<b>一句话：</b>2 年固定按揭利率 ${fmt(R.mort_now, 2)}%，${rateWord}；${ap}；${nw}。模型对未来 12 个月伦敦房价的中位预测是 <b>${sg(f.p50, 0)}%</b>，范围 ${sg(f.p10, 0)}% 到 ${sg(f.p90, 0)}%，${acc}。租金同比 ${sg(R.london.rent_yoy, 1)}%，公寓毛收益率约 ${fmt(R.london.yield_flat, 1)}%。`;
 }
 
-function draw(){ tiles(); rics(); forecast(); backtest(); timing(); five(); sources(); }
+function experiments(){
+  const E = R.experiments; if (!E){ $('exp').hidden = true; return; }
+  const pen = E.penalty, keys = ['lam0.3', 'lam1', 'lam3', 'lam10', 'lam30', 'lam100', 'lam300', 'lam1000'];
+  const best = keys.reduce((a, k) => pen[k].rmse < pen[a].rmse ? k : a, keys[0]);
+  $('exp_pen').innerHTML = '<tr><th>惩罚强度 λ</th><th>总误差 RMSE</th><th>2016 年以来</th><th>转折月误差</th><th>方向对</th></tr>'
+    + keys.map(k => { const v = pen[k], lam = k.slice(3);
+      return `<tr${k === best ? ' style="font-weight:600"' : ''}><td>${lam}${lam === '30' ? '（原来）' : ''}${k === best ? '（事后最优）' : ''}</td><td>${fmt(v.rmse, 2)}</td><td>${fmt(v.post2016, 2)}</td><td>${fmt(v.turn.rmse, 2)}</td><td>${Math.round(v.hit * 100)}%</td></tr>`; }).join('')
+    + `<tr style="font-weight:600"><td>每月重新选择（嵌套）</td><td>${fmt(pen.nested.rmse, 2)}</td><td>${fmt(pen.nested.post2016, 2)}</td><td>${fmt(pen.nested.turn.rmse, 2)}</td><td>${Math.round(pen.nested.hit * 100)}%</td></tr>`
+    + `<tr style="color:var(--muted)"><td>「和去年一样」</td><td>${fmt(E.naive_rmse, 2)}</td><td>${fmt(E.naive_post2016, 2)}</td><td>—</td><td>—</td></tr>`;
+  const ch = E.nested_lambda_choices, tot = Object.values(ch).reduce((a, b) => a + b, 0), big = (ch['100.0'] || 0) + (ch['300.0'] || 0) + (ch['1000.0'] || 0);
+  $('exp_pen_n').innerHTML = `共 ${E.common_n} 个月（${E.common_from} 至 ${E.common_to}）。<b>结论：</b>`
+    + `1）λ 越大越好，到 100–300 最低（${fmt(pen[best].rmse, 2)}，比原来的 30 低 ${fmt((1 - pen[best].rmse / pen.lam30.rmse) * 100, 0)}%），说明原来的模型<b>确实过拟合了</b>。`
+    + `2）但「每月自己选」（${fmt(pen.nested.rmse, 2)}）几乎和固定 30 一样（差异不显著，p = ${fmt(E.nested_vs_30.p, 2)}）：它在 ${Math.round(big / tot * 100)}% 的月份选了 100 以上，其余月份（多在训练数据少的早期）选得很小。按规则它「不比 30 差」所以被采用，但<b>事后最优的 λ 是看过测试结果才知道的，不能当作样本外成绩</b>。`
+    + `3）所有 λ 在 2016 年以后都还是不如「和去年一样」（${fmt(E.naive_post2016, 2)}）。最新一次预测选出的 λ = ${R.forecast.lambda}。`;
+  const V = E.valuation, names = Object.keys(V), per = Object.keys(V[names[0]].periods), vn = E.valuation_naive;
+  $('exp_val').innerHTML = `<tr><th>输入</th><th>总误差</th>${per.map(p => `<th>${p}</th>`).join('')}<th>转折月误差</th><th>方向对</th><th>对现有模型 p</th><th>是否采用</th></tr>`
+    + names.map(k => { const v = V[k], base = k === names[0], vd = E.verdict[k];
+      return `<tr${base ? ' style="font-weight:600"' : ''}><td>${k}</td><td>${fmt(v.rmse, 2)}</td>${per.map(p => { const x = v.periods[p].rmse, b0 = V[names[0]].periods[p].rmse;
+        return `<td style="color:${!base && x < b0 ? 'var(--pos)' : !base ? 'var(--neg)' : 'inherit'}">${fmt(x, 2)}</td>`; }).join('')}<td>${fmt(v.turn.rmse, 2)}</td><td>${Math.round(v.hit * 100)}%</td><td>${v.dm_vs_base ? fmt(v.dm_vs_base.p, 2) : '—'}</td><td>${base ? '基准' : vd.adopt ? '<b style="color:var(--pos)">采用</b>' : '不采用（' + vd.period_wins + '/3 时期更好）'}</td></tr>`; }).join('')
+    + `<tr style="color:var(--muted)"><td>「和去年一样」</td><td>${fmt(vn.rmse, 2)}</td>${per.map(p => `<td>${fmt(vn.periods[p], 2)}</td>`).join('')}<td>${fmt(vn.turn, 2)}</td><td>—</td><td>—</td><td>—</td></tr>`;
+  const v1 = V['+ 两个估值项'], b0 = V[names[0]];
+  $('exp_val_n').innerHTML = `共 ${E.valuation_n} 个月（${E.valuation_from} 至 ${E.valuation_to}，要等到有 5 年训练数据才开始，所以比上面的主回测短）。绿 = 比现有模型更准。`
+    + `<b>结论：加了估值项，总误差反而变大（${fmt(v1.rmse, 2)} 对 ${fmt(b0.rmse, 2)}），转折月也更差（${fmt(v1.turn.rmse, 2)} 对 ${fmt(b0.turn.rmse, 2)}），所以不加入预测。</b>`
+    + `唯一的亮点是 2020 年以后：估值项把误差从 ${fmt(b0.periods['2020–'].rmse, 2)} 降到 ${fmt(v1.periods['2020–'].rmse, 2)}，但 2008–2015 年反而更差，而且所有差异在统计上都不显著（p ≥ 0.27）。一次利率冲击的好成绩，不足以说明它是稳定的规律。`;
+  const vnow = R.valuation_now, sgn = x => x > 0 ? '偏贵' : '偏便宜';
+  $('exp_now').innerHTML = `<div class="tile"><div class="l">房价 ÷ 收入 · ${vnow.month}</div><div class="v">${sg(vnow.pe_gap, 1)}%</div><div class="d">相对自 2000 年以来平均：${sgn(vnow.pe_gap)}。五年前是 ${sg(vnow.pe_gap_5y_ago, 0)}%。</div></div>
+    <div class="tile"><div class="l">月供 ÷ 收入 · ${vnow.month}</div><div class="v">${sg(vnow.pti_gap, 1)}%</div><div class="d">相对自 2000 年以来平均：${sgn(vnow.pti_gap)}。利率比过去二十年的平均高，月供压力比房价本身显示的更大。</div></div>`;
+}
+
+function draw(){ tiles(); rics(); forecast(); backtest(); experiments(); timing(); five(); sources(); }
 fetch('radar.json').then(r => r.json()).then(d => { R = d; draw();
   for (const id of ['price', 'dep', 'term']) $(id).addEventListener('input', timing);
   for (const id of ['eg', 'r5', 'pt', 'rx']) $(id).addEventListener('input', five);

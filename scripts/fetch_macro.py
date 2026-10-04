@@ -149,6 +149,21 @@ def hmrc(refresh):
     return d.set_index("ym").drop(columns=["month"])
 
 
+def awe(refresh):
+    """ONS average weekly earnings, whole economy, total pay, seasonally adjusted (KAB9), monthly from 2000.
+    Great Britain, not London: used only to say how dear London housing is against what people earn."""
+    f = RAW / "awe_kab9.csv"
+    if refresh or not f.exists():
+        f.write_bytes(get("https://www.ons.gov.uk/generator?format=csv&uri=/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kab9/emp"))
+    rows = [l.split(",") for l in f.read_text().splitlines()]
+    out = {}
+    for r in rows:
+        mm = re.fullmatch(r'"(\d{4}) ([A-Z]{3})"', r[0]) if len(r) > 1 else None
+        if mm:
+            out[f"{mm.group(1)}-{['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'].index(mm.group(2)) + 1:02d}"] = float(r[1].strip('"'))
+    return pd.Series(out, name="awe").to_frame()
+
+
 def rics_latest():
     """The headline readings in the most recent RICS narrative (net balances, %). Hand-checkable and
     dated; there is no machine-readable series, and the London figures are only drawn as a chart."""
@@ -160,7 +175,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh", action="store_true")
     a = ap.parse_args()
-    parts = {"boe": boe(a.refresh), "curves": curves(a.refresh), "nationwide": nationwide(a.refresh), "hmrc": hmrc(a.refresh)}
+    parts = {"boe": boe(a.refresh), "curves": curves(a.refresh), "nationwide": nationwide(a.refresh), "hmrc": hmrc(a.refresh), "awe": awe(a.refresh)}
     for k, v in parts.items():
         print(f"{k:11s} {len(v):4d} months  {v.index.min()} .. {v.index.max()}  cols {list(v.columns)[:6]}")
     m = pd.concat(parts.values(), axis=1).sort_index()

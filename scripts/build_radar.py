@@ -29,6 +29,10 @@ PROC, WEB, RAW = ROOT / "data" / "processed", ROOT / "web" / "data", ROOT / "dat
 H = 12            # months ahead
 FIRST_TEST = "2003-01"
 MIN_TRAIN = 96    # months of training targets before the first test origin
+# The ridge penalty: chosen afresh at every forecast month, by walking forward inside the training data
+# (tune_lambda). It replaced a fixed 30 after experiments_radar.py showed 30 was a guess that left the model
+# under-shrunk; the experiments also found that the nested choice itself is noisy, so it is reported, not trusted.
+NESTED = True
 
 
 def load():
@@ -66,11 +70,30 @@ def features(d, m):
     sl = m["glc_spot5y"] - m["bank_rate"]; sl.index = pd.PeriodIndex(sl.index, freq="M")
     f["slope"] = sl.shift(-2).reindex(P).to_numpy()
     nw = np.log(m["nw_sa"]); nw.index = pd.PeriodIndex(nw.index, freq="M")
-    f["nw3"] = ((nw - nw.shift(3)) * 400 / 3).shift(-2).reindex(P).to_numpy()           # annualised, known at s+2
+    f["nw3"] = ((nw - nw.shift(3)) * 400 / 3).shift(-2).reindex(P).to_numpy()           # 3-month log change, scaled; known at s+2 (the scale is irrelevant: inputs are standardised)
+    # How dear London is against what people earn, in two forms. Both are measured against their own
+    # average to date (an expanding mean, never the future), so the number says "dearer or cheaper than
+    # it has usually been", which is the thing that can mean-revert. Earnings are Great Britain's average
+    # weekly pay (from 2000), so it is the gap that matters, not the level.
+    aw = np.log(m["awe"]); aw.index = pd.PeriodIndex(aw.index, freq="M")
+    aw = aw.reindex(P).to_numpy()
+    pe = pd.Series((lp.to_numpy() - aw) * 100, index=d.index)
+    f["pe_gap"] = pe - pe.expanding(min_periods=36).mean()
+    rate = shifted(m, "mort2y75", 2).reindex(P).to_numpy()
+    ann = np.log(annuity(rate))
+    pti = pd.Series((lp.to_numpy() + ann - aw) * 100, index=d.index)
+    f["pti_gap"] = pti - pti.expanding(min_periods=36).mean()
     f["y"] = (lp.shift(-H) - lp) * 100
     return f
 
 
+def annuity(r, years=25):
+    """Monthly payment per £1 borrowed at an annual rate r (in %), repayment mortgage."""
+    i = np.asarray(r, dtype=float) / 1200
+    return i / (1 - (1 + i) ** (-years * 12))
+
+
+VAL = ["pe_gap", "pti_gap"]
 SETS = {"all": ["mom12", "mom36", "appr", "mort", "mort_chg6", "bank_chg12", "slope", "nw3"],
         "momentum only": ["mom12", "mom36"],
         "rates only": ["mort", "mort_chg6", "bank_chg12", "slope"],
@@ -90,19 +113,52 @@ def ridge_pred(m, X):
     return m["c"] + ((X - m["mu"]) / m["sd"]).to_numpy() @ m["b"]
 
 
-def backtest(f, cols, lam=30.0):
-    """Expanding window, refit every origin; training targets only from origins whose outcome is known."""
+LAMBDAS = [0.3, 1, 3, 10, 30, 100, 300, 1000]
+
+
+def tune_lambda(tr, cols, grid=LAMBDAS, folds=36, min_inner=36):
+    """Pick the ridge penalty by walking forward inside the training rows only: for each of the last
+    `folds` training origins, fit on the rows whose outcome was known by then and score the next one.
+    One eigen-decomposition per fold serves every penalty on the grid."""
+    n = len(tr)
+    if n < folds + min_inner + H:
+        return 30.0
+    X, y = tr[cols].to_numpy(float), tr["y"].to_numpy(float)
+    sse = np.zeros(len(grid))
+    cnt = 0
+    for v in range(n - folds, n):
+        k = v - H + 1
+        if k < min_inner:
+            continue
+        mu, sd = X[:k].mean(0), X[:k].std(0, ddof=1)
+        sd[sd == 0] = 1
+        Z = (X[:k] - mu) / sd
+        yc = y[:k] - y[:k].mean()
+        w, Q = np.linalg.eigh(Z.T @ Z)
+        qz = Q.T @ (Z.T @ yc)
+        zv = Q.T @ ((X[v] - mu) / sd)
+        for j, l in enumerate(grid):
+            pred = y[:k].mean() + float(zv @ (qz / (w + l)))
+            sse[j] += (y[v] - pred) ** 2
+        cnt += 1
+    return float(grid[int(np.argmin(sse))]) if cnt else 30.0
+
+
+def backtest(f, cols, lam=30.0, min_train=MIN_TRAIN, first=FIRST_TEST, nested=False):
+    """Expanding window, refit every origin; training targets only from origins whose outcome is known.
+    lam may be a number, or nested=True to choose it inside each training window."""
     rows = []
-    origins = [s for s in f.index if s >= FIRST_TEST and not np.isnan(f.at[s, "y"])]
+    origins = [s for s in f.index if s >= first and not np.isnan(f.at[s, "y"])]
     idx = list(f.index)
     for s in origins:
         k = idx.index(s)
         tr = f.iloc[: max(k - H + 1, 0)].dropna(subset=cols + ["y"])
-        if len(tr) < MIN_TRAIN or f.loc[[s], cols].isna().any(axis=None):
+        if len(tr) < min_train or f.loc[[s], cols].isna().any(axis=None):
             continue
-        mdl = ridge_fit(tr[cols], tr["y"].to_numpy(float), lam)
-        rows.append((s, float(ridge_pred(mdl, f.loc[[s], cols])[0]), f.at[s, "y"], f.at[s, "mom12"]))
-    return pd.DataFrame(rows, columns=["s", "pred", "y", "naive"]).set_index("s")
+        l = tune_lambda(tr, cols) if nested else lam
+        mdl = ridge_fit(tr[cols], tr["y"].to_numpy(float), l)
+        rows.append((s, float(ridge_pred(mdl, f.loc[[s], cols])[0]), f.at[s, "y"], f.at[s, "mom12"], l))
+    return pd.DataFrame(rows, columns=["s", "pred", "y", "naive", "lam"]).set_index("s")
 
 
 def score(bt):
@@ -120,7 +176,7 @@ def main():
     out = {"asof_hpi": d.index[d.lp.notna()].max(), "horizon": H}
     res = {}
     for name, cols in SETS.items():
-        bt = backtest(f, cols)
+        bt = backtest(f, cols, nested=NESTED)
         sc = score(bt)
         sc["post2009"] = score(bt.loc["2009-01":])
         sc["post2016"] = score(bt.loc["2016-01":])
@@ -134,7 +190,8 @@ def main():
     last = out["asof_hpi"]
     cols = SETS["all"]
     tr = f.iloc[: len(f) - H].dropna(subset=cols + ["y"])
-    mdl = ridge_fit(tr[cols], tr["y"].to_numpy(float), 30.0)
+    lam_final = tune_lambda(tr, cols) if NESTED else 30.0
+    mdl = ridge_fit(tr[cols], tr["y"].to_numpy(float), lam_final)
     x = f.loc[[last], cols]
     missing = [c for c in cols if np.isnan(x.iloc[0][c])]
     # the newest macro months may not exist yet: fall back to the latest value of each feature
@@ -143,7 +200,7 @@ def main():
     point = float(ridge_pred(mdl, x)[0])
     resid = (all_bt["y"] - all_bt["pred"]).to_numpy()
     q = np.quantile(resid, [.1, .25, .5, .75, .9])
-    out["forecast"] = {"origin": last, "point": point, "p10": point + q[0], "p25": point + q[1], "p50": point + q[2], "p75": point + q[3],
+    out["forecast"] = {"origin": last, "lambda": lam_final, "point": point, "p10": point + q[0], "p25": point + q[1], "p50": point + q[2], "p75": point + q[3],
                        "p90": point + q[4], "prob_fall": float((point + resid < 0).mean()),
                        "features_used_from": {c: (last if c not in missing else "latest available") for c in cols},
                        "contrib": {c: float(((x.iloc[0][c] - mdl["mu"][c]) / mdl["sd"][c]) * mdl["b"][i]) for i, c in enumerate(cols)},
@@ -160,6 +217,13 @@ def main():
                         "share_up": float((ys > 0).mean()), "years": sorted({s[:4] for s in nn})}
     # --- the out-of-sample record, for the chart
     out["backtest_from"] = all_bt.index[0]
+    out["lambda_used"] = {str(k): int(v) for k, v in all_bt["lam"].value_counts().sort_index().items()}
+    # where London sits against earnings now. Not in the forecast: experiments_radar.py found it did not help.
+    out["valuation_now"] = {"pe_gap": float(f["pe_gap"].dropna().iloc[-1]), "pti_gap": float(f["pti_gap"].dropna().iloc[-1]),
+                            "month": f["pe_gap"].dropna().index[-1],
+                            "pe_gap_5y_ago": float(f["pe_gap"].dropna().iloc[-61]) if f["pe_gap"].dropna().size > 61 else None}
+    ex = PROC / "radar_experiments.json"
+    out["experiments"] = json.loads(ex.read_text()) if ex.exists() else None
     out["record"] = [{"s": s, "pred": round(r.pred, 2), "y": round(r.y, 2), "naive": round(r.naive, 2)} for s, r in all_bt.iterrows()]
     out["ois"] = json.loads((PROC / "ois_path.json").read_text())
     # --- what a higher mortgage rate does, arithmetically, and what it did last time

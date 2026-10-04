@@ -14,7 +14,9 @@ What it does, in order, and what each is for:
   3. macro     Bank of England rates / approvals / yield and swap curves, Nationwide, HMRC (fetch_macro.py)
   4. dataset   the borough price + rent panel (build_dataset.py)
   5. trend     the price-trend page (build_site.py)
-  6. radar     backtest, forecast and the radar page (build_radar.py, radar_page.py)
+  6. radar     the penalty / valuation experiments, then backtest, forecast and the radar page
+               (experiments_radar.py, build_radar.py, radar_page.py). The radar still runs if the
+               experiments fail; it then shows the last ones.
   with --ppd:   fetch_ppd, build_ppd_aggregates, build_ppd_agg, build_sector_agg, build_schemes first
   with --devs:  Barratt and the other developers, then TfL times to the three workplaces
   then, when the map's own data moved: build_web_payload.py
@@ -132,6 +134,7 @@ def plan(a):
     S += [Step("macro", script("fetch_macro.py", "--refresh"), note="Bank of England, Nationwide, HMRC"),
           Step("dataset", script("build_dataset.py"), needs=["hpi", "pipr"] + (["sector"] if (a.ppd or a.all) else []), note="borough price + rent panel"),
           Step("trend", script("build_site.py"), needs=["dataset"], note="price-trend page"),
+          Step("experiments", script("experiments_radar.py"), needs=["dataset", "macro"], note="penalty + valuation tests (read by the radar)"),
           Step("radar", script("build_radar.py"), needs=["dataset", "macro"], note="backtest + forecast"),
           Step("radar_page", script("radar_page.py"), needs=["radar"])]
     if a.devs or a.all:
