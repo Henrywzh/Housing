@@ -135,6 +135,7 @@ def plan(a):
           Step("dataset", script("build_dataset.py"), needs=["hpi", "pipr"] + (["sector"] if (a.ppd or a.all) else []), note="borough price + rent panel"),
           Step("trend", script("build_site.py"), needs=["dataset"], note="price-trend page"),
           Step("experiments", script("experiments_radar.py"), needs=["dataset", "macro"], note="penalty + valuation tests (read by the radar)"),
+          Step("simple", script("experiments_simple.py"), needs=["dataset", "macro"], note="simple models, locked holdout, quantile regression"),
           Step("radar", script("build_radar.py"), needs=["dataset", "macro"], note="backtest + forecast"),
           Step("radar_page", script("radar_page.py"), needs=["radar"])]
     if a.devs or a.all:

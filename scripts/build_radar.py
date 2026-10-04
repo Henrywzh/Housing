@@ -224,6 +224,8 @@ def main():
                             "pe_gap_5y_ago": float(f["pe_gap"].dropna().iloc[-61]) if f["pe_gap"].dropna().size > 61 else None}
     ex = PROC / "radar_experiments.json"
     out["experiments"] = json.loads(ex.read_text()) if ex.exists() else None
+    sx = PROC / "radar_simple.json"
+    out["simple"] = json.loads(sx.read_text()) if sx.exists() else None
     out["record"] = [{"s": s, "pred": round(r.pred, 2), "y": round(r.y, 2), "naive": round(r.naive, 2)} for s, r in all_bt.iterrows()]
     out["ois"] = json.loads((PROC / "ois_path.json").read_text())
     # --- what a higher mortgage rate does, arithmetically, and what it did last time
