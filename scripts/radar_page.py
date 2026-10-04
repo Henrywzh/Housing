@@ -7,7 +7,7 @@ PAGE = r'''<!doctype html>
 <html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>市场雷达</title>
 <style>
-:root{--paper:#f2f4f6;--panel:#fff;--panel-2:#f7f9fa;--ink:#121b24;--ink-2:#3d4c58;--muted:#6a7884;--rule:#d9e0e6;--signal:#c2402a;--pos:#2b6f52;--neg:#a8382a;--blue:#3b6a9a;--amber:#b0781a;color-scheme:light}
+:root{--paper:#f2f4f6;--panel:#fff;--panel-2:#f7f9fa;--ink:#121b24;--ink-2:#3d4c58;--muted:#6a7884;--rule:#d9e0e6;--signal:#c2402a;--pos:#2c6f52;--neg:#a8382a;--blue:#3b6a9a;--amber:#b0781a;color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#0e141a;--panel:#161e26;--panel-2:#1b242d;--ink:#e7edf2;--ink-2:#b3c0cb;--muted:#8798a5;--rule:#2a353f;--signal:#e8664c;--pos:#5fb389;--neg:#e07a68;--blue:#7fa8d1;--amber:#d9a640;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font:400 14px/1.55 "Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
